@@ -7,7 +7,9 @@ import {
     metaWebhook,
     shopifyWebhook,
     getWidgetScript,
-    metaDataDeletion
+    metaDataDeletion,
+    tiktokLogin,
+    tiktokCallback
 } from '../controllers/integrationController.js';
 
 const router = express.Router();
@@ -31,10 +33,9 @@ router.get('/shopify/callback', shopifyCallback);
 
 // 📱 TikTok Auth
 // @route GET /api/integrations/tiktok/login
-router.get('/tiktok/login', (req, res) => {
-    // توجيه مبدئي حتى إعداد تطبيق تيك توك
-    res.send("صفحة ربط تيك توك قيد التطوير. يرجى إضافة الـ Client Key.");
-});
+router.get('/tiktok/login', tiktokLogin);
+// @route GET /api/integrations/tiktok/callback
+router.get('/tiktok/callback', tiktokCallback);
 
 // 🔔 Webhooks (التحقق من التوقيع والأمان يتم في الـ Controller)
 // @route POST /api/integrations/webhooks/meta (استلام البيانات)

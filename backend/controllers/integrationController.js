@@ -250,6 +250,82 @@ const shopifyWebhook = async (req, res) => {
 };
 
 // ----------------------------------------------------------------------
+// 🎵 TikTok Integrations
+// ----------------------------------------------------------------------
+
+// @desc    Initiate TikTok OAuth
+const tiktokLogin = (req, res) => {
+  const { companyId } = req.query;
+  if (!companyId) return res.status(400).send('Company ID required');
+
+  const clientKey = process.env.TIKTOK_CLIENT_KEY;
+  if (!clientKey) return res.status(400).send('TikTok Client Key is missing in environment variables. Please add TIKTOK_CLIENT_KEY.');
+
+  const redirectUri = `${BASE_URL}/api/integrations/tiktok/callback`;
+
+  // CSRF state token
+  const nonce = generateNonce(companyId);
+  const state = Object.keys(NONCES_STORE).find(key => NONCES_STORE[key] === nonce) ? `${companyId}:${nonce}` : `${companyId}:${nonce}`;
+
+  const scope = 'user.info.basic'; // You can add more scopes like message.send
+
+  const authUrl = `https://www.tiktok.com/v2/auth/authorize/?client_key=${clientKey}&scope=${scope}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
+
+  res.redirect(authUrl);
+};
+
+// @desc    Handle TikTok OAuth Callback
+const tiktokCallback = async (req, res) => {
+  const { code, state, error } = req.query;
+
+  if (error) return res.status(400).send(`TikTok Auth Error: ${error}`);
+
+  const [companyId, nonce] = state ? state.split(':') : [null, null];
+
+  if (!code || !companyId || !nonce) return res.status(400).send('Missing required parameters.');
+
+  if (!verifyNonce(companyId, nonce)) return res.status(403).send('Invalid state nonce. CSRF suspected.');
+
+  try {
+    const tokenUrl = 'https://open.tiktokapis.com/v2/oauth/token/';
+
+    const params = new URLSearchParams();
+    params.append('client_key', process.env.TIKTOK_CLIENT_KEY);
+    params.append('client_secret', process.env.TIKTOK_CLIENT_SECRET);
+    params.append('code', code);
+    params.append('grant_type', 'authorization_code');
+    params.append('redirect_uri', `${BASE_URL}/api/integrations/tiktok/callback`);
+
+    // Exchange code for token
+    const { data } = await axios.post(tokenUrl, params.toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+
+    const { access_token, refresh_token, open_id } = data;
+
+    // Save Integration
+    await Integration.findOneAndUpdate(
+      { company: companyId, platform: 'tiktok' },
+      {
+        credentials: {
+          accessToken: access_token,
+          refreshToken: refresh_token,
+          openId: open_id
+        },
+        isActive: true
+      },
+      { new: true, upsert: true }
+    );
+
+    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?status=success&platform=tiktok`);
+
+  } catch (err) {
+    console.error('TikTok Auth Error:', err.response?.data || err.message);
+    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?status=error&platform=tiktok`);
+  }
+};
+
+// ----------------------------------------------------------------------
 // 🗑️ Data Deletion & Widget
 // ----------------------------------------------------------------------
 
@@ -441,5 +517,7 @@ export {
   metaWebhook,
   shopifyWebhook,
   getWidgetScript,
-  metaDataDeletion
+  metaDataDeletion,
+  tiktokLogin,
+  tiktokCallback
 };
