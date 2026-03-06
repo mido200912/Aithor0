@@ -100,7 +100,7 @@ const Integrations = () => {
             const user = userStr ? JSON.parse(userStr) : null;
 
             // For Meta (Facebook/Instagram/WhatsApp)
-            if (integration.id === 'facebook' || integration.id === 'whatsapp') {
+            if (integration.id === 'facebook' || integration.id === 'whatsapp' || integration.id === 'instagram') {
                 // Redirect to Meta OAuth flow
                 const companyRes = await axios.get(`${BACKEND_URL}/company`, {
                     headers: { Authorization: `Bearer ${token}` }
@@ -108,6 +108,15 @@ const Integrations = () => {
                 const companyId = companyRes.data._id;
 
                 window.location.href = `${BACKEND_URL}/integrations/meta/login?companyId=${companyId}`;
+            }
+            // For TikTok
+            else if (integration.id === 'tiktok') {
+                const companyRes = await axios.get(`${BACKEND_URL}/company`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const companyId = companyRes.data._id;
+
+                window.location.href = `${BACKEND_URL}/integrations/tiktok/login?companyId=${companyId}`;
             }
             // For Shopify
             else if (integration.id === 'shopify') {
