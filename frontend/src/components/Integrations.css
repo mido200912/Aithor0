@@ -1,0 +1,123 @@
+/* ========================================
+   Integrations Section
+======================================== */
+.integrations {
+    background: var(--color-bg);
+}
+
+.integrations-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-lg);
+}
+
+.integration-card {
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-md);
+    text-align: center;
+    transition: all var(--transition-normal);
+    position: relative;
+}
+
+.integration-card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 20px 50px var(--color-shadow-hover);
+}
+
+.integration-card.coming-soon {
+    opacity: 0.6;
+}
+
+.integration-card.coming-soon:hover {
+    transform: translateY(-5px);
+}
+
+.integration-logo {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.5rem;
+    margin: 0 auto var(--spacing-md);
+    transition: all var(--transition-normal);
+}
+
+.integration-card:hover .integration-logo {
+    transform: scale(1.1) rotate(5deg);
+}
+
+.integration-logo.facebook {
+    background: #1877F2;
+    color: white;
+}
+
+.integration-logo.instagram {
+    background: linear-gradient(45deg, #F58529, #DD2A7B, #8134AF);
+    color: white;
+}
+
+.integration-logo.whatsapp {
+    background: #25D366;
+    color: white;
+}
+
+.integration-logo.shopify {
+    background: #96BF48;
+    color: white;
+}
+
+.integration-logo.telegram {
+    background: #0088cc;
+    color: white;
+}
+
+.integration-logo.twitter {
+    background: #1DA1F2;
+    color: white;
+}
+
+.integration-card h3 {
+    font-size: 1.25rem;
+    margin-bottom: 0.5rem;
+    color: var(--color-text);
+}
+
+.integration-card p {
+    font-size: 0.975rem;
+    margin-bottom: var(--spacing-md);
+}
+
+.integration-status {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    background: var(--color-text);
+    color: var(--color-bg);
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.integration-status.upcoming {
+    background: var(--color-border);
+    color: var(--color-text-secondary);
+}
+
+/* ========================================
+   Responsive Design
+======================================== */
+@media (max-width: 768px) {
+    .integrations-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    .integrations-grid {
+        grid-template-columns: 1fr;
+    }
+}

@@ -1,0 +1,248 @@
+/* AithorChatWidget.css */
+
+.aithor-widget-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 9999;
+    font-family: 'Inter', sans-serif;
+}
+
+/* Toggle Button */
+.widget-toggle-btn {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    color: white;
+    border: none;
+    box-shadow: 0 4px 14px rgba(79, 70, 229, 0.4);
+    cursor: pointer;
+    font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.widget-toggle-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 20px rgba(79, 70, 229, 0.6);
+}
+
+.widget-toggle-btn.open {
+    transform: rotate(90deg);
+    background: #ef4444;
+    /* Web safe red for close */
+}
+
+/* Chat Window */
+.widget-window {
+    position: absolute;
+    bottom: 80px;
+    right: 0;
+    width: 350px;
+    height: 500px;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.animate-pop-up {
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Header */
+.widget-header {
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    padding: 1rem;
+    color: white;
+}
+
+.header-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    background: #22c55e;
+    border-radius: 50%;
+    box-shadow: 0 0 5px #22c55e;
+}
+
+.widget-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.widget-header p {
+    margin: 0;
+    font-size: 0.85rem;
+    opacity: 0.9;
+}
+
+/* Body */
+.widget-body {
+    flex: 1;
+    padding: 1rem;
+    overflow-y: auto;
+    background: #f9fafb;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.widget-msg {
+    max-width: 85%;
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    position: relative;
+    word-wrap: break-word;
+}
+
+.widget-msg.assistant {
+    background: white;
+    color: #1f2937;
+    align-self: flex-start;
+    border-bottom-left-radius: 2px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.widget-msg.user {
+    background: #4f46e5;
+    color: white;
+    align-self: flex-end;
+    border-bottom-right-radius: 2px;
+    box-shadow: 0 2px 4px rgba(79, 70, 229, 0.2);
+}
+
+.widget-msg.error {
+    background: #fee2e2;
+    color: #ef4444;
+}
+
+/* Typing Indicator */
+.typing-dots {
+    display: flex;
+    gap: 4px;
+    padding: 4px 2px;
+}
+
+.typing-dots span {
+    width: 6px;
+    height: 6px;
+    background: #9ca3af;
+    border-radius: 50%;
+    animation: bounce 1.4s infinite;
+}
+
+.typing-dots span:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-dots span:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes bounce {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-4px);
+    }
+}
+
+/* Footer */
+.widget-footer {
+    padding: 12px;
+    background: white;
+    border-top: 1px solid #f3f4f6;
+    display: flex;
+    gap: 8px;
+}
+
+.widget-footer input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid #e5e7eb;
+    border-radius: 24px;
+    outline: none;
+    font-size: 0.9rem;
+    transition: border-color 0.2s;
+}
+
+.widget-footer input:focus {
+    border-color: #4f46e5;
+}
+
+.widget-footer button {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: none;
+    background: #4f46e5;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.2s;
+}
+
+.widget-footer button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Dark Mode Support (optional, inherits from app) */
+body.dark-mode .widget-window {
+    background: #1f2937;
+    border-color: #374151;
+}
+
+body.dark-mode .widget-body {
+    background: #111827;
+}
+
+body.dark-mode .widget-msg.assistant {
+    background: #374151;
+    color: white;
+}
+
+body.dark-mode .widget-footer {
+    background: #1f2937;
+    border-color: #374151;
+}
+
+body.dark-mode .widget-footer input {
+    background: #374151;
+    border-color: #4b5563;
+    color: white;
+}

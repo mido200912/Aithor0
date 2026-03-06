@@ -1,0 +1,26 @@
+/* ========================================
+   App Wrapper
+======================================== */
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+main {
+  flex: 1;
+}
+
+/* ========================================
+   Common Section Styles
+======================================== */
+section {
+  padding: var(--spacing-xl) 0;
+  position: relative;
+}
+
+@media (max-width: 768px) {
+  section {
+    padding: var(--spacing-lg) 0;
+  }
+}

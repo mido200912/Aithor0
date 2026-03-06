@@ -1,0 +1,85 @@
+.settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 2rem;
+}
+
+.settings-input {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: inherit;
+    font-size: 1rem;
+}
+
+.settings-input:focus {
+    outline: none;
+    border-color: var(--color-text);
+    box-shadow: 0 0 0 2px var(--color-shadow);
+}
+
+.card-body .form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+/* API Key */
+.api-key-box {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.api-key-box input {
+    flex: 1;
+    padding: 0.75rem;
+    background: rgba(var(--color-text-rgb), 0.05);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-secondary);
+    font-family: monospace;
+    font-size: 1rem;
+}
+
+.copy-feedback {
+    display: block;
+    font-size: 0.8rem;
+    color: #10b981;
+    margin-bottom: 1rem;
+}
+
+.warning-box {
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid #f59e0b;
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    color: #b45309;
+    /* Dark orange for text */
+}
+
+.warning-box i {
+    font-size: 1.25rem;
+    margin-top: 0.2rem;
+}
+
+.warning-box p {
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+[data-theme="dark"] .warning-box {
+    color: #fbbf24;
+}
+
+@media (max-width: 768px) {
+    .settings-grid {
+        grid-template-columns: 1fr;
+    }
+}

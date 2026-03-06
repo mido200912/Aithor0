@@ -1,0 +1,112 @@
+.integrations-page {
+    padding-bottom: 2rem;
+}
+
+.integrations-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 1.5rem;
+}
+
+.integration-item {
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    position: relative;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.integration-item:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px var(--color-shadow);
+}
+
+.integration-item.connected {
+    border-color: #10b981;
+}
+
+.integration-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.75rem;
+    flex-shrink: 0;
+}
+
+.integration-info {
+    flex: 1;
+}
+
+.integration-info h3 {
+    margin: 0 0 0.25rem 0;
+    font-size: 1.1rem;
+}
+
+.integration-info p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+}
+
+.status-dot {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    width: 10px;
+    height: 10px;
+    background: #10b981;
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px var(--color-card-bg);
+}
+
+[dir="rtl"] .status-dot {
+    right: auto;
+    left: 1rem;
+}
+
+.badge-gray {
+    background: rgba(0, 0, 0, 0.1);
+    color: var(--color-text-secondary);
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+}
+
+.btn-danger {
+    background: #ef4444;
+    color: white;
+    border: none;
+}
+
+.btn-danger:hover {
+    background: #dc2626;
+}
+
+.integration-action {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+@media (max-width: 768px) {
+    .integrations-list {
+        grid-template-columns: 1fr;
+    }
+
+    .integration-action {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .integration-action .btn {
+        width: 100%;
+        margin: 0 !important;
+    }
+}

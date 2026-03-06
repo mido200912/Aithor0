@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AiThor Integration Test</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 600px;
+            margin: 2rem auto;
+            padding: 1rem;
+            background: #f3f4f6;
+        }
+
+        .chat-box {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .messages {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            background: #f9fafb;
+        }
+
+        .msg {
+            margin-bottom: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            max-width: 80%;
+        }
+
+        .msg.user {
+            background: #4f46e5;
+            color: white;
+            margin-right: auto;
+        }
+
+        .msg.ai {
+            background: #e5e7eb;
+            color: #1f2937;
+            margin-left: auto;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        input {
+            flex: 1;
+            padding: 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+        }
+
+        button {
+            padding: 0.75rem 1.5rem;
+            background: #4f46e5;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #111827;
+        }
+
+        .config-box {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background: #e0e7ff;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="chat-box">
+        <h2>🤖 اختبار ربط AiThor</h2>
+
+        <div class="config-box">
+            <label style="display:block; margin-bottom:0.5rem; font-weight:bold;">Company API Key:</label>
+            <input type="text" id="apiKey" value="565ede3498174a18405cd77f0d751c95f7c011e717d57bcc" style="width:100%;">
+        </div>
+
+        <div class="messages" id="messages">
+            <div class="msg ai">مرحباً! أنا البوت التجريبي. كيف يمكنني مساعدتك؟</div>
+        </div>
+
+        <form class="input-group" onsubmit="sendMessage(event)">
+            <input type="text" id="userInput" placeholder="اكتب رسالتك..." required>
+            <button type="submit" id="sendBtn">إرسال</button>
+        </form>
+    </div>
+
+    <script>
+        // Update this if running on a real server
+        const API_URL = 'http://localhost:5000/api/public/chat';
+
+        async function sendMessage(e) {
+            e.preventDefault();
+            const input = document.getElementById('userInput');
+            const btn = document.getElementById('sendBtn');
+            const apiKey = document.getElementById('apiKey').value;
+            const messagesDiv = document.getElementById('messages');
+            const text = input.value.trim();
+
+            if (!text) return;
+
+            // Add User Message
+            appendMessage(text, 'user');
+            input.value = '';
+            btn.disabled = true;
+            appendMessage('جاري الكتابة...', 'ai loading');
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        companyApiKey: apiKey,
+                        prompt: text
+                    })
+                });
+
+                const data = await response.json();
+
+                // Remove loading
+                document.querySelector('.loading').remove();
+
+                if (data.success) {
+                    appendMessage(data.reply, 'ai');
+                } else {
+                    appendMessage('خطأ: ' + (data.error || 'Unknown error'), 'ai');
+                }
+
+            } catch (error) {
+                console.error(error);
+                if (document.querySelector('.loading')) document.querySelector('.loading').remove();
+                appendMessage('فشل الاتصال بالسيرفر.', 'ai');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function appendMessage(text, type) {
+            const messagesDiv = document.getElementById('messages');
+            const div = document.createElement('div');
+            div.className = 'msg ' + type;
+            div.textContent = text;
+            messagesDiv.appendChild(div);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+    </script>
+
+</body>
+
+</html>

@@ -1,0 +1,156 @@
+/* ========================================
+   Pricing Section
+======================================== */
+.pricing {
+    background: var(--color-bg);
+}
+
+.pricing-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-lg);
+    max-width: 1100px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.pricing-card {
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    padding: var(--spacing-lg);
+    text-align: center;
+    transition: all var(--transition-normal);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.pricing-card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 20px 60px var(--color-shadow-hover);
+}
+
+.pricing-card.popular {
+    border-color: var(--color-text);
+    box-shadow: 0 10px 50px var(--color-shadow);
+    transform: scale(1.05);
+}
+
+.pricing-card.popular:hover {
+    transform: translateY(-10px) scale(1.05);
+}
+
+.popular-badge {
+    position: absolute;
+    top: -15px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--color-text);
+    color: var(--color-bg);
+    padding: 0.5rem 1.5rem;
+    border-radius: var(--radius-lg);
+    font-size: 0.875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    box-shadow: 0 5px 20px var(--color-shadow);
+}
+
+.plan-name {
+    font-size: 1.75rem;
+    margin-bottom: var(--spacing-md);
+    color: var(--color-text);
+}
+
+.plan-price {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 0.25rem;
+    margin-bottom: var(--spacing-sm);
+}
+
+.currency {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-text-secondary);
+}
+
+.amount {
+    font-size: 4rem;
+    font-weight: 900;
+    line-height: 1;
+    color: var(--color-text);
+}
+
+.period {
+    font-size: 1.125rem;
+    color: var(--color-text-secondary);
+}
+
+.plan-description {
+    font-size: 1rem;
+    margin-bottom: var(--spacing-lg);
+    padding-bottom: var(--spacing-md);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.plan-features {
+    list-style: none;
+    padding: 0;
+    margin-bottom: var(--spacing-lg);
+    flex: 1;
+    text-align: right;
+}
+
+.plan-features li {
+    padding: 0.75rem 0;
+    color: var(--color-text);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+    transition: all var(--transition-fast);
+}
+
+.plan-features li:last-child {
+    border-bottom: none;
+}
+
+.plan-features li:hover {
+    padding-right: 0.5rem;
+}
+
+.plan-features li.disabled {
+    color: var(--color-text-secondary);
+    opacity: 0.5;
+}
+
+.plan-features i {
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.plan-features li:not(.disabled) i {
+    color: var(--color-text);
+}
+
+/* ========================================
+   Responsive Design
+======================================== */
+@media (max-width: 1024px) {
+    .pricing-card.popular {
+        transform: scale(1);
+    }
+
+    .pricing-card.popular:hover {
+        transform: translateY(-10px) scale(1);
+    }
+}
+
+@media (max-width: 768px) {
+    .pricing-grid {
+        grid-template-columns: 1fr;
+    }
+}

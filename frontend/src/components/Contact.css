@@ -1,0 +1,146 @@
+/* ========================================
+   Contact Section
+======================================== */
+.contact {
+    background: var(--color-bg);
+}
+
+.contact-container {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr;
+    gap: var(--spacing-lg);
+    margin-top: var(--spacing-lg);
+}
+
+/* Contact Info */
+.contact-info {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.contact-item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    transition: all var(--transition-normal);
+}
+
+.contact-item:hover {
+    transform: translateX(-10px);
+    box-shadow: 0 10px 30px var(--color-shadow);
+    border-color: var(--color-text);
+}
+
+.contact-icon {
+    width: 50px;
+    height: 50px;
+    background: var(--color-text);
+    color: var(--color-bg);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.contact-item h4 {
+    font-size: 1.125rem;
+    margin-bottom: 0.5rem;
+    color: var(--color-text);
+}
+
+.contact-item p {
+    font-size: 1rem;
+    margin: 0;
+}
+
+/* Social Links */
+.social-links {
+    display: flex;
+    gap: 1rem;
+    margin-top: var(--spacing-md);
+}
+
+.social-link {
+    width: 45px;
+    height: 45px;
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text);
+    font-size: 1.25rem;
+    transition: all var(--transition-normal);
+    text-decoration: none;
+}
+
+.social-link:hover {
+    background: var(--color-text);
+    color: var(--color-bg);
+    transform: translateY(-5px) rotate(10deg);
+    box-shadow: 0 10px 25px var(--color-shadow);
+}
+
+/* Contact Form */
+.contact-form {
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    padding: var(--spacing-lg);
+    box-shadow: 0 10px 40px var(--color-shadow);
+}
+
+.form-group {
+    margin-bottom: var(--spacing-md);
+}
+
+.form-group input,
+.form-group textarea {
+    width: 100%;
+    padding: 1rem 1.5rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-family: var(--font-ar);
+    font-size: 1rem;
+    color: var(--color-text);
+    transition: all var(--transition-normal);
+    resize: vertical;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: var(--color-text);
+    box-shadow: 0 0 0 3px var(--color-shadow);
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+    color: var(--color-text-secondary);
+}
+
+.form-group textarea {
+    min-height: 150px;
+}
+
+/* ========================================
+   Responsive Design
+======================================== */
+@media (max-width: 768px) {
+    .contact-container {
+        grid-template-columns: 1fr;
+    }
+
+    .contact-item:hover {
+        transform: translateX(0) translateY(-5px);
+    }
+}
