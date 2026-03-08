@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
+import { motion } from 'framer-motion';
 import './Settings.css';
 
 const Settings = () => {
     const { user } = useAuth();
+    const { t } = useLanguage();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
@@ -26,12 +29,7 @@ const Settings = () => {
     const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
     const token = localStorage.getItem('token');
 
-    useEffect(() => {
-        fetchCompanyData();
-        fetchApiKey();
-    }, []);
-
-    const fetchCompanyData = async () => {
+    const fetchCompanyData = useCallback(async () => {
         try {
             const res = await axios.get(`${BACKEND_URL}/company`, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -52,9 +50,9 @@ const Settings = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [BACKEND_URL, token, user?.name]);
 
-    const fetchApiKey = async () => {
+    const fetchApiKey = useCallback(async () => {
         try {
             const res = await axios.get(`${BACKEND_URL}/company/apikey`, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -63,11 +61,18 @@ const Settings = () => {
         } catch (error) {
             console.error("Error fetching API Key", error);
         }
-    };
+    }, [BACKEND_URL, token]);
+
+    useEffect(() => {
+        fetchCompanyData();
+        fetchApiKey();
+    }, [fetchCompanyData, fetchApiKey]);
+
+
 
     const copyToClipboard = () => {
         navigator.clipboard.writeText(apiKey);
-        setCopySuccess('تم النسخ!');
+        setCopySuccess(t.dashboard.settingsPage.copiedText);
         setTimeout(() => setCopySuccess(''), 2000);
     };
 
@@ -89,100 +94,121 @@ const Settings = () => {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
-            alert('✅ تم تحديث بيانات الشركة بنجاح!');
+            alert(`✅ ${t.dashboard.settingsPage.saveSuccess}`);
         } catch (error) {
             console.error("Error updating settings:", error);
-            alert('❌ حدث خطأ أثناء الحفظ');
+            alert(`❌ ${t.dashboard.settingsPage.saveError}`);
         } finally {
             setSaving(false);
         }
     };
 
-    if (loading) return <div className="loading-state">جاري تحميل الإعدادات...</div>;
+    if (loading) return <div className="loading-state">{t.dashboard.settingsPage.loading}</div>;
+
+    const containerVariants = {
+        hidden: { opacity: 0 },
+        visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
+    };
+
+    const itemVariants = {
+        hidden: { opacity: 0, y: 20 },
+        visible: { opacity: 1, y: 0 }
+    };
 
     return (
         <div className="settings-page animate-fade-in">
-            <h1 className="page-title">إعدادات الشركة</h1>
+            <motion.h1
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="page-title"
+            >
+                {t.dashboard.settingsPage.title}
+            </motion.h1>
 
-            <div className="settings-grid">
+            <motion.div
+                className="settings-grid"
+                variants={containerVariants}
+                initial="hidden"
+                animate="visible"
+            >
                 {/* General Settings */}
-                <div className="card full-width">
+                <motion.div variants={itemVariants} className="card full-width">
                     <div className="card-header">
                         <i className="fas fa-building"></i>
-                        <h3>بيانات المؤسسة</h3>
+                        <h3>{t.dashboard.settingsPage.orgData}</h3>
                     </div>
                     <div className="card-body">
                         <div className="form-row">
                             <div className="form-group half">
-                                <label>اسم الشركة</label>
+                                <label>{t.dashboard.settingsPage.companyName}</label>
                                 <input
                                     type="text"
                                     name="name"
                                     value={companyData.name}
                                     onChange={handleInputChange}
                                     className="settings-input"
-                                    placeholder="اسم شركتك"
+                                    placeholder={t.dashboard.settingsPage.companyNameHint}
                                 />
                             </div>
                             <div className="form-group half">
-                                <label>مجال العمل (Industry)</label>
+                                <label>{t.dashboard.settingsPage.industry}</label>
                                 <input
                                     type="text"
                                     name="industry"
                                     value={companyData.industry}
                                     onChange={handleInputChange}
                                     className="settings-input"
-                                    placeholder="مثال: تكنولوجيا، تعليم، تجارة..."
+                                    placeholder={t.dashboard.settingsPage.industryHint}
                                 />
                             </div>
                         </div>
 
                         <div className="form-group">
-                            <label>وصف الشركة</label>
+                            <label>{t.dashboard.settingsPage.description}</label>
                             <textarea
                                 name="description"
                                 value={companyData.description}
                                 onChange={handleInputChange}
                                 className="settings-input"
                                 rows="3"
-                                placeholder="وصف قصير عن نشاط الشركة وما تقدمه..."
+                                placeholder={t.dashboard.settingsPage.descriptionHint}
                             />
                         </div>
 
                         <div className="form-row">
                             <div className="form-group half">
-                                <label>الرؤية (Vision)</label>
+                                <label>{t.dashboard.settingsPage.vision}</label>
                                 <textarea
                                     name="vision"
                                     value={companyData.vision}
                                     onChange={handleInputChange}
                                     className="settings-input"
                                     rows="2"
-                                    placeholder="إلى ماذا تطمح الشركة في المستقبل؟"
+                                    placeholder={t.dashboard.settingsPage.visionHint}
                                 />
                             </div>
                             <div className="form-group half">
-                                <label>الرسالة (Mission)</label>
+                                <label>{t.dashboard.settingsPage.mission}</label>
                                 <textarea
                                     name="mission"
                                     value={companyData.mission}
                                     onChange={handleInputChange}
                                     className="settings-input"
                                     rows="2"
-                                    placeholder="ما هي مهمة الشركة اليومية؟"
+                                    placeholder={t.dashboard.settingsPage.missionHint}
                                 />
                             </div>
                         </div>
 
                         <div className="form-group">
-                            <label>قيم الشركة (Values) - افصل بينها بفاصلة</label>
+                            <label>{t.dashboard.settingsPage.values}</label>
                             <input
                                 type="text"
                                 name="values"
                                 value={companyData.values}
                                 onChange={handleInputChange}
                                 className="settings-input"
-                                placeholder="مثال: الشفافية، الابتكار، الجودة"
+                                placeholder={t.dashboard.settingsPage.valuesHint}
                             />
                         </div>
 
@@ -191,22 +217,22 @@ const Settings = () => {
                             onClick={handleSave}
                             disabled={saving}
                         >
-                            {saving ? 'جاري الحفظ...' : 'حفظ التغييرات'}
+                            {saving ? t.dashboard.settingsPage.saving : t.dashboard.settingsPage.saveChanges}
                         </button>
                     </div>
-                </div>
+                </motion.div>
 
                 {/* API Key Section */}
-                <div className="card full-width">
+                <motion.div variants={itemVariants} className="card full-width">
                     <div className="card-header">
                         <i className="fas fa-key"></i>
-                        <h3>مفتاح الربط (API Key)</h3>
+                        <h3>{t.dashboard.settingsPage.apiKeyTitle}</h3>
                     </div>
                     <div className="card-body">
-                        <p className="instruction-tip">استخدم هذا المفتاح لربط أنظمتك الخارجية بـ Aithor.</p>
+                        <p className="instruction-tip">{t.dashboard.settingsPage.apiKeyDesc}</p>
                         <div className="api-key-box">
                             <input type="text" value={apiKey} readOnly />
-                            <button className="icon-btn" onClick={copyToClipboard} title="نسخ">
+                            <button className="icon-btn" onClick={copyToClipboard} title={t.dashboard.settingsPage.copy}>
                                 <i className={`fas ${copySuccess ? 'fa-check' : 'fa-copy'}`}></i>
                             </button>
                         </div>
@@ -214,11 +240,11 @@ const Settings = () => {
 
                         <div className="warning-box">
                             <i className="fas fa-exclamation-triangle"></i>
-                            <p>هذا المفتاح سري للغاية. يتيح الوصول لخدمات الذكاء الاصطناعي باسم شركتك.</p>
+                            <p>{t.dashboard.settingsPage.apiKeyWarning}</p>
                         </div>
                     </div>
-                </div>
-            </div>
+                </motion.div>
+            </motion.div>
         </div>
     );
 };

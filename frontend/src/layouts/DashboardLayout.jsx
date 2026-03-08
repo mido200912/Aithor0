@@ -3,10 +3,11 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { motion, AnimatePresence } from 'framer-motion';
 import './DashboardLayout.css';
 
 const DashboardLayout = () => {
-    const { t, language } = useLanguage();
+    const { t, language, toggleLanguage } = useLanguage();
     const { logout, user } = useAuth();
     const { theme, toggleTheme } = useTheme();
     const location = useLocation();
@@ -94,10 +95,13 @@ const DashboardLayout = () => {
             <main className="dashboard-main">
                 <header className="dashboard-header">
                     <button className="toggle-btn" onClick={toggleSidebar}>
-                        <i className="fas fa-bars"></i>
+                        <i className={`fas fa-${isSidebarOpen ? 'outdent' : 'indent'}`}></i>
                     </button>
 
                     <div className="header-actions">
+                        <button className="lang-btn" onClick={toggleLanguage}>
+                            {language === 'ar' ? 'English' : 'عربي'}
+                        </button>
                         <button className="theme-btn" onClick={toggleTheme}>
                             {theme === 'light' ? <i className="fas fa-moon"></i> : <i className="fas fa-sun"></i>}
                         </button>
@@ -105,7 +109,18 @@ const DashboardLayout = () => {
                 </header>
 
                 <div className="dashboard-content">
-                    <Outlet />
+                    <AnimatePresence mode="wait">
+                        <motion.div
+                            key={location.pathname}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            transition={{ duration: 0.3 }}
+                            className="dashboard-content-inner"
+                        >
+                            <Outlet />
+                        </motion.div>
+                    </AnimatePresence>
                 </div>
             </main>
         </div>

@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useLanguage } from '../../context/LanguageContext';
 import './ModelTest.css';
 
 const ModelTest = () => {
-    const { token, user } = useAuth();
-    const { theme } = useTheme();
+    const { token } = useAuth();
+    const { t } = useLanguage();
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
@@ -32,7 +32,7 @@ const ModelTest = () => {
                     {
                         id: 1,
                         role: 'assistant',
-                        content: 'مرحباً! أنا النموذج الذكي الخاص بشركتك. كيف يمكنني مساعدتك اليوم؟ يمكنك اختباري للتأكد من أنني أتبع التعليمات بشكل صحيح.'
+                        content: t.dashboard.modelTestPage.greeting
                     }
                 ]);
             } catch (error) {
@@ -40,7 +40,7 @@ const ModelTest = () => {
             }
         };
         fetchCompanyAndGreet();
-    }, []);
+    }, [t.dashboard.modelTestPage.greeting]);
 
     const sendMessage = async (e) => {
         e.preventDefault();
@@ -61,7 +61,7 @@ const ModelTest = () => {
             const currentToken = token || localStorage.getItem('token');
 
             if (!currentToken) {
-                alert("يرجى تسجيل الدخول مرة أخرى.");
+                alert(t.dashboard.modelTestPage.loginRequired);
                 return;
             }
 
@@ -83,7 +83,7 @@ const ModelTest = () => {
             const errorMessage = {
                 id: Date.now() + 1,
                 role: 'assistant',
-                content: 'عذراً، حدث خطأ أثناء الاتصال بالخادم.',
+                content: t.dashboard.modelTestPage.errorResponse,
                 error: true
             };
             setMessages(prev => [...prev, errorMessage]);
@@ -94,17 +94,40 @@ const ModelTest = () => {
 
     return (
         <div className="model-test-container animate-fade-in">
-            <h1 className="page-title">اختبار النموذج</h1>
-            <p className="page-subtitle">تحدث مع البوت لتجربة ردوده بناءً على بيانات شركتك وتعليماتك.</p>
+            <motion.h1
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="page-title"
+            >
+                {t.dashboard.modelTestPage.title}
+            </motion.h1>
+            <motion.p
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.1 }}
+                className="page-subtitle"
+            >
+                {t.dashboard.modelTestPage.subtitle}
+            </motion.p>
 
-            <div className="chat-interface card">
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.2 }}
+                className="chat-interface card"
+            >
                 <div className="chat-messages">
                     {messages.map((msg) => (
-                        <div key={msg.id} className={`message ${msg.role} ${msg.error ? 'error' : ''}`}>
+                        <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            key={msg.id}
+                            className={`message ${msg.role} ${msg.error ? 'error' : ''}`}
+                        >
                             <div className="message-bubble">
                                 {msg.content}
                             </div>
-                        </div>
+                        </motion.div>
                     ))}
                     {loading && (
                         <div className="message assistant">
@@ -123,14 +146,14 @@ const ModelTest = () => {
                         type="text"
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
-                        placeholder="اكتب رسالتك هنا..."
+                        placeholder={t.dashboard.modelTestPage.placeholder}
                         disabled={loading}
                     />
                     <button type="submit" className="btn btn-primary" disabled={loading || !input.trim()}>
                         <i className="fas fa-paper-plane"></i>
                     </button>
                 </form>
-            </div>
+            </motion.div>
         </div>
     );
 };

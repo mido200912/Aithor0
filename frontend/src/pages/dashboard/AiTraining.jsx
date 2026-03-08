@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useLanguage } from '../../context/LanguageContext';
+import { motion } from 'framer-motion';
 import './AiTraining.css';
 
 const AiTraining = () => {
+    const { t } = useLanguage();
     const [files, setFiles] = useState([]);
     const [instructions, setInstructions] = useState('');
     const [extractedKnowledge, setExtractedKnowledge] = useState(''); // ✨ جديد
@@ -133,17 +136,45 @@ const AiTraining = () => {
         }
     };
 
+    const containerVariants = {
+        hidden: { opacity: 0 },
+        visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
+    };
+
+    const itemVariants = {
+        hidden: { opacity: 0, y: 20 },
+        visible: { opacity: 1, y: 0 }
+    };
+
     return (
         <div className="ai-training-container animate-fade-in">
-            <h1 className="page-title">تدريب البوت</h1>
-            <p className="page-subtitle">قم بتغذية الذكاء الاصطناعي بمعلومات عن شركتك ليتمكن من الرد بدقة</p>
+            <motion.h1
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="page-title"
+            >
+                {t.dashboard.trainingPage.title}
+            </motion.h1>
+            <motion.p
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.1 }}
+                className="page-subtitle"
+            >
+                {t.dashboard.trainingPage.subtitle}
+            </motion.p>
 
-            <div className="training-grid">
+            <motion.div
+                className="training-grid"
+                variants={containerVariants}
+                initial="hidden"
+                animate="visible"
+            >
                 {/* Knowledge Base Section */}
-                <div className="card">
+                <motion.div variants={itemVariants} className="card">
                     <div className="card-header">
                         <i className="fas fa-book"></i>
-                        <h3>قاعدة المعرفة</h3>
+                        <h3>{t.dashboard.trainingPage.knowledgeBase}</h3>
                     </div>
                     <div className="card-body">
                         <div className="upload-box relative">
@@ -157,14 +188,14 @@ const AiTraining = () => {
                             />
                             <label htmlFor="file-upload-training" className={`upload-label ${uploading ? 'uploading' : ''}`}>
                                 <i className={uploading ? "fas fa-spinner fa-spin" : "fas fa-cloud-upload-alt"}></i>
-                                <span>{uploading ? 'جاري الرفع والتحليل...' : 'اختر ملف (PDF, DOCX, TXT)'}</span>
-                                <small>سيتم استخراج المعلومات تلقائياً بواسطة AI</small>
+                                <span>{uploading ? t.dashboard.trainingPage.uploadingFile : t.dashboard.trainingPage.uploadBtn}</span>
+                                <small>{t.dashboard.trainingPage.uploadHint}</small>
                             </label>
                         </div>
 
                         <div className="files-list">
                             {files.length === 0 ? (
-                                <p className="empty-state">لم يتم رفع أي ملفات بعد</p>
+                                <p className="empty-state">{t.dashboard.trainingPage.noFiles}</p>
                             ) : (
                                 files.map((file) => (
                                     <div key={file._id} className="file-item">
@@ -175,7 +206,7 @@ const AiTraining = () => {
                                         <button
                                             className="btn-icon-delete"
                                             onClick={() => handleDeleteFile(file._id)}
-                                            title="حذف"
+                                            title={t.dashboard.trainingPage.delete}
                                         >
                                             <i className="fas fa-trash"></i>
                                         </button>
@@ -184,24 +215,24 @@ const AiTraining = () => {
                             )}
                         </div>
                     </div>
-                </div>
+                </motion.div>
 
                 {/* ✨ Extracted Knowledge Section - جديد */}
-                <div className="card full-width">
+                <motion.div variants={itemVariants} className="card full-width">
                     <div className="card-header">
                         <i className="fas fa-brain"></i>
-                        <h3>المعلومات المستخرجة من الملفات</h3>
+                        <h3>{t.dashboard.trainingPage.extractedTitle}</h3>
                     </div>
                     <div className="card-body">
                         <p className="card-description">
-                            📝 تم استخراج هذه المعلومات تلقائياً من الملفات المرفوعة. يمكنك تعديلها وإضافة المزيد.
+                            {t.dashboard.trainingPage.extractedDesc}
                         </p>
 
                         <textarea
                             className="instructions-textarea"
                             value={extractedKnowledge}
                             onChange={(e) => setExtractedKnowledge(e.target.value)}
-                            placeholder="سيتم ملء هذا الحقل تلقائياً عند رفع الملفات..."
+                            placeholder={t.dashboard.trainingPage.extractedPlaceholder}
                             rows="15"
                             style={{ minHeight: '300px' }}
                         />
@@ -211,27 +242,27 @@ const AiTraining = () => {
                             onClick={handleSaveExtractedKnowledge}
                             disabled={savingKnowledge}
                         >
-                            {savingKnowledge ? 'جاري الحفظ...' : 'حفظ المعلومات المستخرجة'}
+                            {savingKnowledge ? t.dashboard.trainingPage.saving : t.dashboard.trainingPage.saveExtracted}
                         </button>
                     </div>
-                </div>
+                </motion.div>
 
                 {/* Custom Instructions Section */}
-                <div className="card full-width">
+                <motion.div variants={itemVariants} className="card full-width">
                     <div className="card-header">
                         <i className="fas fa-cog"></i>
-                        <h3>تعليمات مخصصة</h3>
+                        <h3>{t.dashboard.trainingPage.customTitle}</h3>
                     </div>
                     <div className="card-body">
                         <p className="card-description">
-                            قم بتخصيص سلوك البوت وأسلوب الرد الخاص به
+                            {t.dashboard.trainingPage.customDesc}
                         </p>
 
                         <textarea
                             className="instructions-textarea"
                             value={instructions}
                             onChange={(e) => setInstructions(e.target.value)}
-                            placeholder="مثال: كن مهذباً ومحترفاً دائماً. الرد بالعربية فقط..."
+                            placeholder={t.dashboard.trainingPage.customPlaceholder}
                             rows="8"
                         />
 
@@ -240,11 +271,11 @@ const AiTraining = () => {
                             onClick={handleSaveInstructions}
                             disabled={saving}
                         >
-                            {saving ? 'جاري الحفظ...' : 'حفظ التعليمات'}
+                            {saving ? t.dashboard.trainingPage.saving : t.dashboard.trainingPage.saveCustom}
                         </button>
                     </div>
-                </div>
-            </div>
+                </motion.div>
+            </motion.div>
         </div>
     );
 };
