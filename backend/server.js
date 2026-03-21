@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
+import fs from "fs";
+import path from "path";
 import chatRoutes from "./routes/chatRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import projectRoutes from "./routes/projectRoutes.js";
@@ -63,6 +65,21 @@ console.log("Routes Mounted Successfully");
 // ✅ Route افتراضي
 app.get("/", (req, res) => {
     res.send("AiThor API is running");
+});
+
+// ✅ Serve Widget JS
+app.get('/widget.js', (req, res) => {
+    try {
+        const filePath = path.join(process.cwd(), 'public', 'widget.js');
+        if (fs.existsSync(filePath)) {
+            res.setHeader('Content-Type', 'application/javascript');
+            return res.sendFile(filePath);
+        }
+        // Fallback or debug info
+        res.status(404).send('widget.js not found in backend public folder. Please ensure there is a public folder at root with widget.js');
+    } catch (e) {
+        res.status(500).send('Error serving widget.js');
+    }
 });
 
 // ✅ التعامل مع الأخطاء
