@@ -17,6 +17,11 @@ import ModelTest from './pages/dashboard/ModelTest';
 import Settings from './pages/dashboard/Settings';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
+import AboutUs from './pages/AboutUs';
+import Blog from './pages/Blog';
+import Careers from './pages/Careers';
+import Docs from './pages/Docs';
+import Support from './pages/Support';
 import './App.css';
 
 function App() {
@@ -35,6 +40,11 @@ function App() {
                 <Route path="/onboarding/connect" element={<OnboardingConnect />} />
                 <Route path="/terms" element={<Terms />} />
                 <Route path="/privacy" element={<Privacy />} />
+                <Route path="/about" element={<AboutUs />} />
+                <Route path="/blog" element={<Blog />} />
+                <Route path="/careers" element={<Careers />} />
+                <Route path="/docs" element={<Docs />} />
+                <Route path="/support" element={<Support />} />
                 {/* Dashboard routes */}
                 <Route path="/dashboard" element={<DashboardLayout />}>
                   <Route index element={<DashboardHome />} />
