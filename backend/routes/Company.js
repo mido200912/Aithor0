@@ -4,6 +4,7 @@ import crypto from "crypto";
 import Company from "../models/company.js";
 import { requireAuth } from "../middleware/auth.js";
 import { verifyApiKey } from "../middleware/verifyApiKey.js";
+import { extractCorexReply } from "../utils/corexHelper.js";
 
 const router = express.Router();
 
@@ -270,29 +271,15 @@ router.post("/external-request", async (req, res) => {
     if (company.mission) context += ` Mission: ${company.mission}.`;
     context += ` Respond in Arabic, using a professional and helpful tone.`;
 
-    // إرسال الطلب إلى نموذج الذكاء الاصطناعي عبر OpenRouter
-    const aiResponse = await axios.post(
-      "https://openrouter.ai/api/v1/chat/completions",
-      {
-        model: "meta-llama/llama-3.3-70b-instruct",
-        messages: [
-          { role: "system", content: context },
-          { role: "user", content: message },
-        ],
-        max_tokens: 300,
-        temperature: 0.7,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    // إرسال الطلب إلى نموذج الذكاء الاصطناعي عبر CoreSys API
+    const fullQuestion = `${context}\n\nUser Question:\n${message}`;
+    const apiUrl = process.env.COREX_API_URL || "https://dev-c7z.pantheonsite.io/CoreSys/chat.php";
+    const apiAccessKey = process.env.COREX_API_KEY || "AITHORV1_6F85B401ED";
+    const requestUrl = `${apiUrl}?key=${apiAccessKey}&act=assistant&a=${encodeURIComponent(fullQuestion)}`;
+    
+    const aiResponse = await axios.get(requestUrl);
 
-    const reply =
-      aiResponse.data.choices?.[0]?.message?.content ||
-      "عذرًا، لم أتمكن من معالجة الطلب الآن.";
+    const reply = extractCorexReply(aiResponse.data, "عذرًا، لم أتمكن من معالجة الطلب الآن.");
 
     // حفظ الطلب والرد في قاعدة البيانات
     company.requests.push({

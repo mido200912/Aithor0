@@ -2,6 +2,7 @@
 import express from "express";
 import axios from "axios";
 import Company from "../models/company.js";
+import { extractCorexReply } from "../utils/corexHelper.js";
 
 const router = express.Router();
 
@@ -57,30 +58,15 @@ ${company.customInstructions || "Respond to customers naturally and professional
 Language: Respond in the same language as the customer's query (Arabic or English).
 `;
 
-    // ✅ إرسال الطلب لموديل OpenRouter باستخدام مفتاح AiThor الأساسي فقط
-    const response = await axios.post(
-      "https://openrouter.ai/api/v1/chat/completions",
-      {
-        model: "meta-llama/llama-3.3-70b-instruct",
-        messages: [
-          { role: "system", content: context },
-          { role: "user", content: prompt },
-        ],
-        temperature: 0.7,
-        max_tokens: 400,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    // ✅ إرسال الطلب لموديل CoreSys بدلاً من OpenRouter
+    const fullQuestion = `${context}\n\nUser Question:\n${prompt}`;
+    const apiUrl = process.env.COREX_API_URL || "https://dev-c7z.pantheonsite.io/CoreSys/chat.php";
+    const apiAccessKey = process.env.COREX_API_KEY || "AITHORV1_6F85B401ED";
+    const requestUrl = `${apiUrl}?key=${apiAccessKey}&act=assistant&a=${encodeURIComponent(fullQuestion)}`;
+    
+    const response = await axios.get(requestUrl);
 
-    const reply =
-      response.data?.choices?.[0]?.message?.content ||
-      "لم يتم الحصول على رد من الذكاء الاصطناعي.";
-
+    const reply = extractCorexReply(response.data, "لم يتم الحصول على رد من الذكاء الاصطناعي.");
     // 💾 حفظ المحادثة في قاعدة البيانات
     const CompanyChat = (await import("../models/CompanyChat.js")).default;
 

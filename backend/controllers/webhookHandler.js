@@ -1,6 +1,7 @@
 import axios from 'axios';
 import Integration from '../models/Integration.js';
 import Company from '../models/company.js';
+import { extractCorexReply } from '../utils/corexHelper.js';
 
 // تتبع الرسائل المعالجة لمنع التكرار
 // ⚠️ ملاحظة للإنتاج: في بيئة العمل الحقيقية (Production)، يفضل استخدام Redis لتخزين processedMessages
@@ -78,29 +79,15 @@ export const handleWhatsAppMessage = async (body) => {
 تحدث بالعربية وكأنك ممثل حقيقي للشركة. كن مفيداً ومهذباً.
                         `.trim();
 
-                        // إرسال الطلب للذكاء الاصطناعي
-                        const aiResponse = await axios.post(
-                            "https://openrouter.ai/api/v1/chat/completions",
-                            {
-                                model: "meta-llama/llama-3.3-70b-instruct",
-                                messages: [
-                                    { role: "system", content: context },
-                                    { role: "user", content: messageText },
-                                ],
-                                temperature: 0.7,
-                                max_tokens: 800,
-                            },
-                            {
-                                headers: {
-                                    Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                                    "Content-Type": "application/json",
-                                },
-                                timeout: 30000,
-                                family: 4,
-                            }
-                        );
+                        // إرسال الطلب للذكاء الاصطناعي عبر CoreSys API
+                        const fullQuestion = `${context}\n\nUser Question:\n${messageText}`;
+                        const apiUrl = process.env.COREX_API_URL || "https://dev-c7z.pantheonsite.io/CoreSys/chat.php";
+                        const aiApiKey = process.env.COREX_API_KEY || "AITHORV1_6F85B401ED";
+                        const requestUrl = `${apiUrl}?key=${aiApiKey}&act=assistant&a=${encodeURIComponent(fullQuestion)}`;
 
-                        const reply = aiResponse.data?.choices?.[0]?.message?.content || "عذراً، لم أتمكن من معالجة طلبك.";
+                        const aiResponse = await axios.get(requestUrl, { timeout: 30000 });
+
+                        const reply = extractCorexReply(aiResponse.data, "عذراً، لم أتمكن من معالجة طلبك.");
 
                         console.log(`🤖 AI Reply: "${reply}"`);
 

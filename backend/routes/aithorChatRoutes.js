@@ -1,5 +1,6 @@
 import express from 'express';
 import axios from 'axios';
+import { extractCorexReply } from '../utils/corexHelper.js';
 
 const router = express.Router();
 
@@ -37,26 +38,14 @@ router.post('/', async (req, res) => {
     try {
         const { prompt } = req.body;
 
-        const response = await axios.post(
-            'https://openrouter.ai/api/v1/chat/completions',
-            {
-                model: 'meta-llama/llama-3.3-70b-instruct',
-                messages: [
-                    { role: 'system', content: AITHOR_CONTEXT },
-                    { role: 'user', content: prompt }
-                ],
-                temperature: 0.7,
-                max_tokens: 500
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                    'Content-Type': 'application/json'
-                }
-            }
-        );
+        const fullQuestion = `${AITHOR_CONTEXT}\n\nUser Question:\n${prompt}`;
+        const apiUrl = process.env.COREX_API_URL || "https://dev-c7z.pantheonsite.io/CoreSys/chat.php";
+        const apiKey = process.env.COREX_API_KEY || "AITHORV1_6F85B401ED";
+        const requestUrl = `${apiUrl}?key=${apiKey}&act=assistant&a=${encodeURIComponent(fullQuestion)}`;
 
-        const reply = response.data.choices?.[0]?.message?.content || "عذراً، أواجه مشكلة تقنية حالياً.";
+        const response = await axios.get(requestUrl);
+
+        const reply = extractCorexReply(response.data, "عذراً، أواجه مشكلة تقنية حالياً.");
         res.json({ reply });
 
     } catch (error) {

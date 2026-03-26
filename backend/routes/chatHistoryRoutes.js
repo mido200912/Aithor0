@@ -3,6 +3,7 @@ import axios from 'axios';
 import { requireAuth } from '../middleware/auth.js';
 import Company from '../models/company.js';
 import CompanyChat from '../models/CompanyChat.js';
+import { extractCorexReply } from '../utils/corexHelper.js';
 
 const router = express.Router();
 
@@ -134,25 +135,14 @@ router.post('/train', requireAuth, async (req, res) => {
 
         const prompt = `Here is a conversation between a Customer and an AI assistant for a company:\n\n${chatContext}\n\nBased on this conversation, extract 1 or 2 concise, generalized instructions or facts to add to the AI's system prompt so it can better handle similar customers in the future. Just provide the specific new instructions/knowledge without surrounding text.`;
 
-        const response = await axios.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            {
-                model: "meta-llama/llama-3.3-70b-instruct",
-                messages: [
-                    { role: "user", content: prompt },
-                ],
-                temperature: 0.5,
-                max_tokens: 200,
-            },
-            {
-                headers: {
-                    Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                    "Content-Type": "application/json",
-                },
-            }
-        );
+        const fullQuestion = `System: Extract knowledge from this chat.\n\nUser Question:\n${prompt}`;
+        const apiUrl = process.env.COREX_API_URL || "https://dev-c7z.pantheonsite.io/CoreSys/chat.php";
+        const apiKey = process.env.COREX_API_KEY || "AITHORV1_6F85B401ED";
+        const requestUrl = `${apiUrl}?key=${apiKey}&act=assistant&a=${encodeURIComponent(fullQuestion)}`;
 
-        const newInstruction = response.data?.choices?.[0]?.message?.content?.trim();
+        const response = await axios.get(requestUrl);
+
+        const newInstruction = extractCorexReply(response.data, null);
 
         if (!newInstruction) {
             return res.status(500).json({ error: 'Failed to extract instructions' });

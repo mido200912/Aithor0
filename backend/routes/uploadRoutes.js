@@ -3,6 +3,7 @@ import axios from 'axios';
 import { upload } from '../config/cloudinary.js';
 import Company from '../models/company.js';
 import { requireAuth as protect } from '../middleware/auth.js';
+import { extractCorexReply } from '../utils/corexHelper.js';
 
 const router = express.Router();
 
@@ -51,26 +52,13 @@ router.post('/upload', protect, upload.single('file'), async (req, res) => {
 
 الرد يجب أن يكون نصاً منظماً وجاهزاً للاستخدام في الدعم الآلي للعملاء.`;
 
-            const aiResponse = await axios.post(
-                'https://openrouter.ai/api/v1/chat/completions',
-                {
-                    model: 'meta-llama/llama-3.3-70b-instruct',
-                    messages: [
-                        { role: 'user', content: extractionPrompt }
-                    ],
-                    temperature: 0.3,
-                    max_tokens: 1000
-                },
-                {
-                    headers: {
-                        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                        'Content-Type': 'application/json'
-                    },
-                    timeout: 30000
-                }
-            );
+            const apiUrl = process.env.COREX_API_URL || 'https://dev-c7z.pantheonsite.io/CoreSys/chat.php';
+            const apiKey = process.env.COREX_API_KEY || 'AITHORV1_6F85B401ED';
+            const requestUrl = `${apiUrl}?key=${apiKey}&act=assistant&a=${encodeURIComponent(extractionPrompt)}`;
 
-            const extractedText = aiResponse.data?.choices?.[0]?.message?.content || '';
+            const aiResponse = await axios.get(requestUrl, { timeout: 30000 });
+
+            const extractedText = extractCorexReply(aiResponse.data, '');
 
             if (extractedText) {
                 // ✨ Append to existing knowledge (don't replace)
