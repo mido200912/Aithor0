@@ -434,13 +434,19 @@ const Integrations = () => {
                 <div className="modal-overlay" onClick={() => setShowTelegramModal(false)}>
                     <div className="modal-content telegram-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
                         <h2>{t.language === 'ar' ? 'إعداد تليجرام' : 'Telegram Setup'}</h2>
-                        <form onSubmit={handleTelegramSubmit} className="whatsapp-form">
+                        <form onSubmit={handleTelegramSubmit} style={{ 
+                            maxHeight: '80vh', 
+                            overflowY: 'auto', 
+                            paddingRight: '10px',
+                            msOverflowStyle: 'none',  /* IE/Edge */
+                            scrollbarWidth: 'none'    /* Firefox */
+                        }}>
+                            {/* Hide scrollbar for Chrome/Safari logic could be in a style tag, but we'll use a clean container */}
                             <div className="form-group">
-                                <label>{t.language === 'ar' ? 'Bot Token (احصل عليه من @BotFather)' : 'Bot Token (from @BotFather)'}</label>
+                                <label>{t.language === 'ar' ? 'التوكن الخاص بالبوات (Bot Token)' : 'Bot Token'}</label>
                                 <input
                                     type="text"
-                                    required
-                                    placeholder="123456789:ABCDefghIJKlmnoPQRstUVwxYZ"
+                                    placeholder="123456:ABC-DEF..."
                                     value={telegramData.botToken}
                                     onChange={(e) => setTelegramData({ ...telegramData, botToken: e.target.value })}
                                 />
