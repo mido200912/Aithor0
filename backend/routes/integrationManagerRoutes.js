@@ -185,13 +185,14 @@ router.post('/telegram', requireAuth, async (req, res) => {
             return res.status(400).json({ error: tgErrMsg });
         }
 
-        // Sanitize commands for DB storage - ensure products and other fields are kept
+        // Sanitize and fully preserve all command fields
         const sanitizedSettingsCommands = (commands || []).map(c => ({
             command: (c.command || '').toLowerCase().replace(/[^a-z0-9_]/g, ''),
             description: c.description || c.category || '',
             category: c.category || '',
             type: c.type || 'ai',
             message: c.message || '',
+            successMessage: c.successMessage || '',
             products: (c.products || []).map(p => ({
                 name: p.name || '',
                 price: p.price || '',
@@ -202,12 +203,8 @@ router.post('/telegram', requireAuth, async (req, res) => {
         const integration = await Integration.findOneAndUpdate(
             { company: company._id, platform: 'telegram' },
             {
-                credentials: {
-                    botToken
-                },
-                settings: {
-                    commands: sanitizedSettingsCommands
-                },
+                credentials: { botToken },
+                settings: { commands: sanitizedSettingsCommands },
                 isActive: true
             },
             { new: true, upsert: true }

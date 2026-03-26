@@ -47,6 +47,8 @@ const integrationSchema = mongoose.Schema({
             },
             // For fixed_message: send this text to the user
             message: String,
+            // For success: message after phone number
+            successMessage: String,
             // For product_menu: show these as inline buttons
             products: [{
                 name: String,
