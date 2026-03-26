@@ -129,7 +129,9 @@ export const handleTelegramWebhook = async (req, res) => {
             const userId = chatId.toString();
 
             // Answer callback to remove loading spinner
-            await axios.post(`https://api.telegram.org/bot{{TOKEN}}/answerCallbackQuery`, { callback_query_id: cb.id }).catch(() => {});
+            // We'll move the answerCallbackQuery down where we have the botToken context
+            // or we'll fetch it here if needed.
+            // For now, let's just make sure we don't use the placeholder.
 
             if (data.startsWith('order:')) {
                 const productName = data.replace('order:', '');
@@ -142,10 +144,9 @@ export const handleTelegramWebhook = async (req, res) => {
 
                 if (!integration) return res.sendStatus(200);
 
-                const company = integration.company;
                 const botToken = integration.credentials.botToken;
 
-                // Fix answerCallbackQuery with real token
+                // Answer callback to remove loading spinner using the correct token
                 await axios.post(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
                     callback_query_id: cb.id
                 }).catch(() => {});

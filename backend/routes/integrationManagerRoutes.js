@@ -150,27 +150,39 @@ router.post('/telegram', requireAuth, async (req, res) => {
         }
 
         // Set webhook for the bot
-        const webhookUrl = `${process.env.BASE_URL}/api/integrations/webhooks/telegram/${company._id}`;
+        const baseUrl = process.env.BASE_URL || 'https://aithor0.vercel.app';
+        if (!baseUrl) {
+            console.error('❌ BASE_URL is missing in environment variables');
+            return res.status(500).json({ error: 'Server configuration error (BASE_URL missing)' });
+        }
+        
+        const webhookUrl = `${baseUrl}/api/integrations/webhooks/telegram/${company._id}`;
         
         try {
+            console.log('🔗 Setting Telegram Webhook to:', webhookUrl);
             await axios.post(`https://api.telegram.org/bot${botToken}/setWebhook`, {
                 url: webhookUrl
             });
 
             // Set custom commands on Telegram
-            if (commands && commands.length > 0) {
-                const tgCommands = commands.map(c => ({
-                    command: c.command.replace('/', ''), // Telegram API expects command without slash
-                    description: c.description || c.category || "Custom command"
-                }));
+            if (commands && Array.isArray(commands) && commands.length > 0) {
+                const tgCommands = commands
+                    .filter(c => c.command) // Ensure command name exists
+                    .map(c => ({
+                        command: c.command.toLowerCase().replace(/[^a-z0-9_]/g, ''), // Telegram allows only a-z, 0-9 and _
+                        description: (c.description || c.category || "فتح " + c.command).substring(0, 255) // Max 256 chars
+                    }));
 
-                await axios.post(`https://api.telegram.org/bot${botToken}/setMyCommands`, {
-                    commands: tgCommands
-                });
+                if (tgCommands.length > 0) {
+                    await axios.post(`https://api.telegram.org/bot${botToken}/setMyCommands`, {
+                        commands: tgCommands
+                    });
+                }
             }
         } catch (tgError) {
-            console.error('Failed to configure Telegram API:', tgError.response?.data || tgError.message);
-            return res.status(400).json({ error: 'Invalid Telegram Bot Token or Telegram API error' });
+            console.error('❌ Telegram API error:', tgError.response?.data || tgError.message);
+            const tgErrMsg = tgError.response?.data?.description || 'Invalid Bot Token or Telegram error';
+            return res.status(400).json({ error: tgErrMsg });
         }
 
         const integration = await Integration.findOneAndUpdate(

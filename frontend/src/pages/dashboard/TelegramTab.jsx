@@ -47,7 +47,7 @@ const TelegramTab = () => {
     const fetchChats = async () => {
         setChatsLoading(true);
         try {
-            const res = await axios.get(`${BACKEND_URL}/chat/conversations`, {
+            const res = await axios.get(`${BACKEND_URL}/support-chat/conversations`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             // Filter telegram only
@@ -63,7 +63,7 @@ const TelegramTab = () => {
 
     const fetchMessages = async (userId) => {
         try {
-            const res = await axios.get(`${BACKEND_URL}/chat/history/${userId}`, {
+            const res = await axios.get(`${BACKEND_URL}/support-chat/history/${userId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setMessages(res.data);
