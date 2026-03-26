@@ -212,6 +212,9 @@ router.post('/telegram', requireAuth, async (req, res) => {
         
         integration.credentials = { botToken };
         integration.settings = { commands: sanitizedSettingsCommands };
+        
+        // Force Mongoose to recognize the nested structure change
+        integration.markModified('settings');
         integration.isActive = true;
 
         await integration.save();

@@ -267,7 +267,8 @@ export const handleTelegramWebhook = async (req, res) => {
                 // Show inline product buttons
                 const products = commandConfig.products || [];
                 if (products.length === 0) {
-                    await tgSend(botToken, chatId, 'عذراً، لا توجد منتجات متاحة حالياً.');
+                    await tgSend(botToken, chatId, `عذراً، لا توجد منتجات متاحة حالياً للأمر (/${commandConfig.command}).\n[Debug: Products Count = 0]`);
+                    return res.sendStatus(200);
                 } else {
                     const introText = commandConfig.message || `🛍️ اختر المنتج الذي تريده من <b>${commandConfig.category || 'قائمتنا'}</b>:`;
                     await tgSendProductMenu(botToken, chatId, products, introText);
