@@ -193,11 +193,7 @@ router.post('/telegram', requireAuth, async (req, res) => {
             type: c.type || 'ai',
             message: c.message || '',
             successMessage: c.successMessage || '',
-            products: (c.products || []).map(p => ({
-                name: p.name || '',
-                price: p.price || '',
-                description: p.description || ''
-            }))
+            products: c.products || [] // Keep original products array from frontend
         }));
 
         // Fix nested array saving by switching to findOne + save()
