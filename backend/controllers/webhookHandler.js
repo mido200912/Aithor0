@@ -143,7 +143,7 @@ export const handleTelegramWebhook = async (req, res) => {
                     company: companyId,
                     platform: 'telegram',
                     isActive: true
-                }).populate('company');
+                }).populate('company').lean();
 
                 if (!integration) return res.sendStatus(200);
 
@@ -189,7 +189,7 @@ export const handleTelegramWebhook = async (req, res) => {
             company: companyId,
             platform: 'telegram',
             isActive: true
-        }).populate('company');
+        }).populate('company').lean();
 
         if (!integration || !integration.company) return res.sendStatus(200);
 

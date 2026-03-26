@@ -200,15 +200,21 @@ router.post('/telegram', requireAuth, async (req, res) => {
             }))
         }));
 
-        const integration = await Integration.findOneAndUpdate(
-            { company: company._id, platform: 'telegram' },
-            {
-                credentials: { botToken },
-                settings: { commands: sanitizedSettingsCommands },
-                isActive: true
-            },
-            { new: true, upsert: true }
-        );
+        // Fix nested array saving by switching to findOne + save()
+        let integration = await Integration.findOne({ company: company._id, platform: 'telegram' });
+        
+        if (!integration) {
+            integration = new Integration({ 
+                company: company._id, 
+                platform: 'telegram' 
+            });
+        }
+        
+        integration.credentials = { botToken };
+        integration.settings = { commands: sanitizedSettingsCommands };
+        integration.isActive = true;
+
+        await integration.save();
 
         res.json({ message: 'Telegram configured and Webhook linked successfully!', integration });
     } catch (error) {
