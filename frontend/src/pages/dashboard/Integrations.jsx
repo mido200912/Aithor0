@@ -1,13 +1,72 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useLanguage } from '../../context/LanguageContext';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import './Integrations.css';
+
+// ─── Toast Notification Component ────────────────────────────────────────────
+const Toast = ({ toast, onClose }) => {
+    if (!toast) return null;
+    const colors = { success: '#10b981', error: '#ef4444', warning: '#f59e0b', info: '#3b82f6' };
+    const icons = { success: 'fa-check-circle', error: 'fa-times-circle', warning: 'fa-exclamation-triangle', info: 'fa-info-circle' };
+    const bg = colors[toast.type] || colors.info;
+    const icon = icons[toast.type] || icons.info;
+
+    return (
+        <AnimatePresence>
+            {toast && (
+                <motion.div
+                    initial={{ x: 400, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    exit={{ x: 400, opacity: 0 }}
+                    transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                    style={{
+                        position: 'fixed', top: '24px', right: '24px', zIndex: 99999,
+                        minWidth: '340px', maxWidth: '440px',
+                        background: '#fff', borderRadius: '16px',
+                        boxShadow: '0 20px 60px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)',
+                        overflow: 'hidden', cursor: 'pointer'
+                    }}
+                    onClick={onClose}
+                >
+                    <div style={{ height: '4px', background: bg }} />
+                    <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
+                        <div style={{
+                            width: '38px', height: '38px', borderRadius: '10px',
+                            background: `${bg}15`, color: bg,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '1.1rem', flexShrink: 0
+                        }}>
+                            <i className={`fas ${icon}`} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#1a1a1a', marginBottom: '4px' }}>
+                                {toast.title}
+                            </div>
+                            <div style={{ fontSize: '0.83rem', color: '#666', lineHeight: '1.5', whiteSpace: 'pre-line' }}>
+                                {toast.message}
+                            </div>
+                        </div>
+                        <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#999', cursor: 'pointer', padding: '4px', fontSize: '0.9rem' }}>
+                            <i className="fas fa-times" />
+                        </button>
+                    </div>
+                </motion.div>
+            )}
+        </AnimatePresence>
+    );
+};
 
 const Integrations = () => {
     const { t } = useLanguage();
     const [integrations, setIntegrations] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [toast, setToast] = useState(null);
+
+    const showToast = (type, title, message = '') => {
+        setToast({ type, title, message });
+        setTimeout(() => setToast(null), 4500);
+    };
     const [showWhatsappModal, setShowWhatsappModal] = useState(false);
     const [whatsappData, setWhatsappData] = useState({ phoneNumberId: '', accessToken: '' });
     
@@ -84,9 +143,9 @@ const Integrations = () => {
 
         if (status && platform) {
             if (status === 'success') {
-                alert(`✅ ${t.dashboard.integrationsPage.success} ${platform}!`);
+                showToast('success', t.language === 'ar' ? 'تم الربط!' : 'Connected!', `${platform} ${t.language === 'ar' ? 'تم ربطه بنجاح' : 'connected successfully'}`);
             } else {
-                alert(`❌ ${t.dashboard.integrationsPage.failed} ${platform}`);
+                showToast('error', t.language === 'ar' ? 'فشل الربط' : 'Connection Failed', platform);
             }
             window.history.replaceState({}, document.title, window.location.pathname);
             fetchIntegrations();
@@ -151,7 +210,7 @@ const Integrations = () => {
             }
         } catch (error) {
             console.error('Error connecting integration:', error);
-            alert(t.dashboard.integrationsPage.errorConnect || 'Error connecting. Try again later.');
+            showToast('error', t.language === 'ar' ? 'خطأ في الربط' : 'Connection Error', t.dashboard.integrationsPage.errorConnect || 'Error connecting. Try again later.');
         }
     };
 
@@ -166,7 +225,7 @@ const Integrations = () => {
             if (currentCmd.command && currentCmd.command.trim() !== '') {
                 // Validate: product_menu needs at least 3 products
                 if (currentCmd.type === 'product_menu' && (currentCmd.products || []).length < 3) {
-                    alert(t.language === 'ar' ? '⚠️ يجب إضافة 3 منتجات على الأقل لقائمة المنتجات!' : '⚠️ Product menu requires at least 3 products!');
+                    showToast('warning', t.language === 'ar' ? 'منتجات غير كافية' : 'Not Enough Products', t.language === 'ar' ? 'يجب إضافة 3 منتجات على الأقل لقائمة المنتجات!' : 'Product menu requires at least 3 products!');
                     return;
                 }
                 finalCommands.push({ ...currentCmd });
@@ -184,7 +243,7 @@ const Integrations = () => {
             await axios.post(`${BACKEND_URL}/integration-manager/telegram`, payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            alert(t.language === 'ar' ? `تم ربط تليجرام بنجاح! ✅\n${productCounts}` : `Telegram connected! ✅\n${productCounts}`);
+            showToast('success', t.language === 'ar' ? 'تم ربط تليجرام! 🚀' : 'Telegram Connected! 🚀', productCounts);
             setShowTelegramModal(false);
             setTelegramData({ botToken: '', commands: [] });
             const emptyCmd = { command: '', description: '', category: '', type: 'ai', message: '', successMessage: '', products: [] };
@@ -193,7 +252,7 @@ const Integrations = () => {
             fetchIntegrations();
         } catch (error) {
             console.error('Error configuring Telegram:', error);
-            alert(t.language === 'ar' ? 'حدث خطأ. تأكد من البوت توكن.' : 'Validation failed. Check your bot token.');
+            showToast('error', t.language === 'ar' ? 'خطأ في الربط' : 'Connection Failed', t.language === 'ar' ? 'تأكد من البوت توكن الصحيح.' : 'Check your bot token and try again.');
         }
     };
 
@@ -208,7 +267,7 @@ const Integrations = () => {
 
     const addProductToCommand = () => {
         if (!newProduct.name) {
-            alert(t.language === 'ar' ? 'اكتب اسم المنتج الأول!' : 'Enter product name first!');
+            showToast('warning', t.language === 'ar' ? 'بيانات ناقصة' : 'Missing Data', t.language === 'ar' ? 'اكتب اسم المنتج الأول!' : 'Enter product name first!');
             return;
         }
         const productToAdd = { name: newProduct.name, price: newProduct.price, description: newProduct.description };
@@ -228,7 +287,7 @@ const Integrations = () => {
         if (!currentCmd.command) return;
         // Validate: product_menu needs at least 3 products
         if (currentCmd.type === 'product_menu' && (currentCmd.products || []).length < 3) {
-            alert(t.language === 'ar' ? '⚠️ يجب إضافة 3 منتجات على الأقل لقائمة المنتجات!' : '⚠️ Product menu requires at least 3 products!');
+            showToast('warning', t.language === 'ar' ? 'منتجات غير كافية' : 'Not Enough Products', t.language === 'ar' ? 'يجب إضافة 3 منتجات على الأقل!' : 'At least 3 products required!');
             return;
         }
         console.log("✅ Adding command from ref:", JSON.stringify(currentCmd));
@@ -263,13 +322,13 @@ const Integrations = () => {
             await axios.post(`${BACKEND_URL}/integration-manager/whatsapp`, whatsappData, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            alert(`✅ ${t.dashboard.integrationsPage.whatsappConfigSuccess || 'WhatsApp configured successfully'}`);
+            showToast('success', t.language === 'ar' ? 'تم الربط!' : 'Connected!', t.dashboard.integrationsPage.whatsappConfigSuccess || 'WhatsApp configured successfully');
             setShowWhatsappModal(false);
             setWhatsappData({ phoneNumberId: '', accessToken: '' });
             fetchIntegrations();
         } catch (error) {
             console.error('Error configuring WhatsApp:', error);
-            alert(t.dashboard.integrationsPage.errorConnect);
+            showToast('error', t.language === 'ar' ? 'خطأ' : 'Error', t.dashboard.integrationsPage.errorConnect);
         }
     };
 
@@ -284,7 +343,7 @@ const Integrations = () => {
             fetchIntegrations();
         } catch (error) {
             console.error('Error toggling integration:', error);
-            alert(t.dashboard.integrationsPage.errorGen);
+            showToast('error', t.language === 'ar' ? 'خطأ' : 'Error', t.dashboard.integrationsPage.errorGen);
         }
     };
 
@@ -301,7 +360,7 @@ const Integrations = () => {
             fetchIntegrations();
         } catch (error) {
             console.error('Error disconnecting integration:', error);
-            alert(t.dashboard.integrationsPage.errorDisconnect);
+            showToast('error', t.language === 'ar' ? 'خطأ' : 'Error', t.dashboard.integrationsPage.errorDisconnect);
         }
     };
 
@@ -317,6 +376,8 @@ const Integrations = () => {
 
     return (
         <div className="integrations-page animate-fade-in">
+            {/* Toast Notification */}
+            <Toast toast={toast} onClose={() => setToast(null)} />
             <motion.h1
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
