@@ -74,7 +74,6 @@ const Integrations = () => {
     useEffect(() => {
         fetchIntegrations();
 
-        // Check for OAuth callback status
         const urlParams = new URLSearchParams(window.location.search);
         const status = urlParams.get('status');
         const platform = urlParams.get('platform');
@@ -85,9 +84,8 @@ const Integrations = () => {
             } else {
                 alert(`❌ ${t.dashboard.integrationsPage.failed} ${platform}`);
             }
-            // Clean URL
             window.history.replaceState({}, document.title, window.location.pathname);
-            fetchIntegrations(); // Refresh integrations
+            fetchIntegrations();
         }
     }, []);
 
@@ -115,46 +113,35 @@ const Integrations = () => {
         if (!integration.available) return;
 
         try {
-            // Get company ID from local storage or token
             const userStr = localStorage.getItem('user');
             const user = userStr ? JSON.parse(userStr) : null;
 
-            // For Meta (Facebook/Instagram)
             if (integration.id === 'facebook' || integration.id === 'instagram') {
-                // Redirect to Meta OAuth flow
                 const companyRes = await axios.get(`${BACKEND_URL}/company`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 const companyId = companyRes.data._id;
-
                 window.location.href = `${BACKEND_URL}/integrations/meta/login?companyId=${companyId}`;
             }
-            // For WhatsApp Manual Flow
             else if (integration.id === 'whatsapp') {
                 setShowWhatsappModal(true);
             }
-            // For TikTok
             else if (integration.id === 'tiktok') {
                 const companyRes = await axios.get(`${BACKEND_URL}/company`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 const companyId = companyRes.data._id;
-
                 window.location.href = `${BACKEND_URL}/integrations/tiktok/login?companyId=${companyId}`;
             }
-            // For Shopify
             else if (integration.id === 'shopify') {
                 const shopUrl = prompt(t.dashboard.integrationsPage.shopifyPrompt);
                 if (!shopUrl) return;
-
                 const companyRes = await axios.get(`${BACKEND_URL}/company`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 const companyId = companyRes.data._id;
-
                 window.location.href = `${BACKEND_URL}/integrations/shopify/login?shop=${shopUrl}&companyId=${companyId}`;
             }
-            // For Telegram
             else if (integration.id === 'telegram') {
                 setShowTelegramModal(true);
             }
@@ -167,6 +154,9 @@ const Integrations = () => {
     const handleTelegramSubmit = async (e) => {
         e.preventDefault();
         try {
+            // Log payload before sending
+            console.log("📤 Sending to backend:", JSON.stringify(telegramData, null, 2));
+            
             await axios.post(`${BACKEND_URL}/integration-manager/telegram`, telegramData, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -180,39 +170,43 @@ const Integrations = () => {
         }
     };
 
+    // ─── ALL state updates use functional form to prevent stale closure bugs ───
+    const updateNewCommand = (field, value) => {
+        setNewCommand(prev => ({ ...prev, [field]: value }));
+    };
+
+    const addProductToCommand = () => {
+        if (!newProduct.name) return;
+        setNewCommand(prev => ({
+            ...prev,
+            products: [...(prev.products || []), { name: newProduct.name, price: newProduct.price, description: newProduct.description }]
+        }));
+        setNewProduct({ name: '', price: '', description: '' });
+    };
+
     const addTelegramCommand = () => {
         if (!newCommand.command) return;
-        
-        console.log("Current built command:", newCommand);
-        
-        setTelegramData(prev => ({ 
-            ...prev, 
-            commands: [...prev.commands, { ...newCommand }] 
+        console.log("✅ Adding command:", JSON.stringify(newCommand));
+        setTelegramData(prev => ({
+            ...prev,
+            commands: [...prev.commands, { ...newCommand }]
         }));
-
         setNewCommand({ command: '', description: '', category: '', type: 'ai', message: '', successMessage: '', products: [] });
         setNewProduct({ name: '', price: '', description: '' });
     };
 
     const removeTelegramCommand = (index) => {
-        const updated = [...telegramData.commands];
-        updated.splice(index, 1);
-        setTelegramData({ ...telegramData, commands: updated });
-    };
-
-    const addProductToCommand = () => {
-        if (!newProduct.name) return;
-        setNewCommand(prev => ({ 
-            ...prev, 
-            products: [...(prev.products || []), { ...newProduct }] 
+        setTelegramData(prev => ({
+            ...prev,
+            commands: prev.commands.filter((_, i) => i !== index)
         }));
-        setNewProduct({ name: '', price: '', description: '' });
     };
 
     const removeProductFromCommand = (idx) => {
-        const updated = [...newCommand.products];
-        updated.splice(idx, 1);
-        setNewCommand({ ...newCommand, products: updated });
+        setNewCommand(prev => ({
+            ...prev,
+            products: prev.products.filter((_, i) => i !== idx)
+        }));
     };
 
     const handleWhatsappSubmit = async (e) => {
@@ -239,7 +233,7 @@ const Integrations = () => {
             await axios.patch(`${BACKEND_URL}/integration-manager/${integration.id}/toggle`, {}, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            fetchIntegrations(); // Refresh
+            fetchIntegrations();
         } catch (error) {
             console.error('Error toggling integration:', error);
             alert(t.dashboard.integrationsPage.errorGen);
@@ -256,7 +250,7 @@ const Integrations = () => {
             await axios.delete(`${BACKEND_URL}/integration-manager/${integration.id}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            fetchIntegrations(); // Refresh
+            fetchIntegrations();
         } catch (error) {
             console.error('Error disconnecting integration:', error);
             alert(t.dashboard.integrationsPage.errorDisconnect);
@@ -442,25 +436,28 @@ const Integrations = () => {
             {/* Telegram Modal */}
             {showTelegramModal && (
                 <div className="modal-overlay" onClick={() => setShowTelegramModal(false)}>
-                    <div className="modal-content telegram-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
-                        <h2>{t.language === 'ar' ? 'إعداد تليجرام' : 'Telegram Setup'}</h2>
+                    <div className="modal-content telegram-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '650px' }}>
+                        <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <i className="fab fa-telegram" style={{ color: '#26A5E4' }} />
+                            {t.language === 'ar' ? 'إعداد تليجرام' : 'Telegram Setup'}
+                        </h2>
                         <form onSubmit={handleTelegramSubmit} style={{ 
-                            maxHeight: '80vh', 
+                            maxHeight: '75vh', 
                             overflowY: 'auto', 
-                            paddingRight: '10px',
-                            msOverflowStyle: 'none',  /* IE/Edge */
-                            scrollbarWidth: 'none'    /* Firefox */
+                            paddingRight: '8px'
                         }}>
-                            {/* Hide scrollbar for Chrome/Safari logic could be in a style tag, but we'll use a clean container */}
                             <div className="form-group">
-                                <label>{t.language === 'ar' ? 'التوكن الخاص بالبوات (Bot Token)' : 'Bot Token'}</label>
+                                <label>{t.language === 'ar' ? 'Bot Token (من @BotFather)' : 'Bot Token (from @BotFather)'}</label>
                                 <input
                                     type="text"
-                                    placeholder="123456:ABC-DEF..."
+                                    required
+                                    placeholder="123456789:ABCDefghIJKlmnoPQRstUVwxYZ"
                                     value={telegramData.botToken}
-                                    onChange={(e) => setTelegramData({ ...telegramData, botToken: e.target.value })}
+                                    onChange={(e) => setTelegramData(prev => ({ ...prev, botToken: e.target.value }))}
+                                    style={{ borderRadius: '10px', padding: '10px 14px', border: '1px solid #ddd' }}
                                 />
                             </div>
+
                             <div style={{ marginTop: '25px', borderTop: '2px solid #f0f0f0', paddingTop: '20px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
                                     <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#26A5E415', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#26A5E4' }}>
@@ -472,13 +469,13 @@ const Integrations = () => {
                                 </div>
                                 
                                 <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: '20px', lineHeight: '1.5' }}>
-                                    {t.language === 'ar' ? 'قم ببناء تجربة تفاعلية لعملائك عبر تليجرام. حدد الأوامر، المنتجات، والردود التلقائية.' : 'Build an interactive experience for your customers. Define commands, products, and auto-replies.'}
+                                    {t.language === 'ar' ? 'قم ببناء تجربة تفاعلية لعملائك عبر تليجرام. حدد الأوامر، المنتجات، والردود التلقائية.' : 'Build an interactive experience for your customers via Telegram.'}
                                 </p>
 
-                                {/* Added commands list - Styled as Cards */}
+                                {/* Saved commands list */}
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '12px', marginBottom: '20px' }}>
                                     {telegramData.commands.map((cmd, idx) => (
-                                        <div key={idx} style={{ position: 'relative', background: '#fff', padding: '15px', borderRadius: '15px', border: '1px solid #e8e8e8', boxShadow: '0 2px 6px rgba(0,0,0,0.03)', transition: 'transform 0.2s' }}>
+                                        <div key={idx} style={{ position: 'relative', background: '#fff', padding: '15px', borderRadius: '15px', border: '1px solid #e8e8e8', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                                                 <span style={{ fontWeight: 800, color: '#26A5E4', fontSize: '0.95rem' }}>/{cmd.command}</span>
                                                 <span style={{ fontSize: '0.7rem', background: '#f0f0f0', padding: '2px 8px', borderRadius: '10px', color: '#888' }}>{cmd.type}</span>
@@ -493,24 +490,24 @@ const Integrations = () => {
                                     ))}
                                 </div>
 
-                                {/* New command builder - Nested UI */}
+                                {/* New command builder */}
                                 <div style={{ background: '#fbfcfe', border: '1px solid #e6ebf5', borderRadius: '20px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '15px' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '15px' }}>
                                         <div className="form-group" style={{ marginBottom: 0 }}>
                                             <label style={{ fontSize: '0.8rem', color: '#666', fontWeight: '600' }}>{t.language === 'ar' ? 'اسم الأمر (بدون /)' : 'Command ID'}</label>
-                                            <input type="text" placeholder="order" value={newCommand.command}
-                                                onChange={e => setNewCommand({ ...newCommand, command: e.target.value })}
+                                            <input type="text" placeholder="shopping" value={newCommand.command}
+                                                onChange={e => updateNewCommand('command', e.target.value)}
                                                 style={{ borderRadius: '10px', padding: '10px 14px', border: '1px solid #ddd' }} />
                                         </div>
                                         <div className="form-group" style={{ marginBottom: 0 }}>
-                                            <label style={{ fontSize: '0.8rem', color: '#666', fontWeight: '600' }}>{t.language === 'ar' ? 'التصنيف (مبيعات، شكاوى...)' : 'Category'}</label>
-                                            <input type="text" placeholder="Sales" value={newCommand.category}
-                                                onChange={e => setNewCommand({ ...newCommand, category: e.target.value })}
+                                            <label style={{ fontSize: '0.8rem', color: '#666', fontWeight: '600' }}>{t.language === 'ar' ? 'التصنيف' : 'Category'}</label>
+                                            <input type="text" placeholder={t.language === 'ar' ? 'مبيعات' : 'Sales'} value={newCommand.category}
+                                                onChange={e => updateNewCommand('category', e.target.value)}
                                                 style={{ borderRadius: '10px', padding: '10px 14px', border: '1px solid #ddd' }} />
                                         </div>
                                         <div className="form-group" style={{ marginBottom: 0 }}>
                                             <label style={{ fontSize: '0.8rem', color: '#666', fontWeight: '600' }}>{t.language === 'ar' ? 'نوع الرد' : 'Logic Type'}</label>
-                                            <select value={newCommand.type} onChange={e => setNewCommand({ ...newCommand, type: e.target.value })}
+                                            <select value={newCommand.type} onChange={e => updateNewCommand('type', e.target.value)}
                                                 style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid #ddd', background: 'white' }}>
                                                 <option value="ai">🤖 AI Reply</option>
                                                 <option value="fixed_message">💬 Fixed Message</option>
@@ -519,21 +516,21 @@ const Integrations = () => {
                                         </div>
                                     </div>
 
-                                    {/* Command Inputs (Dynamic) */}
+                                    {/* Dynamic inputs based on type */}
                                     {newCommand.type !== 'ai' && (
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                                             <div className="form-group" style={{ marginBottom: 0 }}>
-                                                <label style={{ fontSize: '0.8rem', color: '#666', fontWeight: '600' }}>{t.language === 'ar' ? 'رسالة الترحيب / البداية' : 'Intro Message'}</label>
+                                                <label style={{ fontSize: '0.8rem', color: '#666', fontWeight: '600' }}>{t.language === 'ar' ? 'رسالة الترحيب' : 'Intro Message'}</label>
                                                 <textarea rows="3" value={newCommand.message}
                                                     placeholder={t.language === 'ar' ? 'مرحباً بك، اختر طلبك...' : 'Welcome! Please choose...'}
-                                                    onChange={e => setNewCommand({ ...newCommand, message: e.target.value })}
+                                                    onChange={e => updateNewCommand('message', e.target.value)}
                                                     style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid #ddd', fontSize: '0.85rem' }} />
                                             </div>
                                             <div className="form-group" style={{ marginBottom: 0 }}>
-                                                <label style={{ fontSize: '0.8rem', color: '#666', fontWeight: '600' }}>{t.language === 'ar' ? 'رسالة النجاح (بعد استلام الرقم)' : 'Order Success Message'}</label>
+                                                <label style={{ fontSize: '0.8rem', color: '#666', fontWeight: '600' }}>{t.language === 'ar' ? 'رسالة النجاح (بعد الرقم)' : 'Success Message'}</label>
                                                 <textarea rows="3" value={newCommand.successMessage}
                                                     placeholder={t.language === 'ar' ? 'تم استلام طلبك، سنتصل بك قريباً!' : 'Success! We will call you soon.'}
-                                                    onChange={e => setNewCommand({ ...newCommand, successMessage: e.target.value })}
+                                                    onChange={e => updateNewCommand('successMessage', e.target.value)}
                                                     style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid #ddd', fontSize: '0.85rem' }} />
                                             </div>
                                         </div>
@@ -546,7 +543,7 @@ const Integrations = () => {
                                                 <i className="fas fa-boxes" /> {t.language === 'ar' ? 'قائمة المنتجات' : 'Products List'}
                                             </div>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '15px' }}>
-                                                {newCommand.products?.map((p, i) => (
+                                                {(newCommand.products || []).map((p, i) => (
                                                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 15px', background: '#f8fbfc', borderRadius: '10px', border: '1px solid #ececec' }}>
                                                         <span style={{ fontSize: '0.85rem', fontWeight: '600' }}>{p.name} <small style={{ color: '#26A5E4', marginInlineStart: '10px' }}>{p.price}</small></span>
                                                         <button type="button" onClick={() => removeProductFromCommand(i)} style={{ color: '#ff4d4f', background: 'none', border: 'none', cursor: 'pointer' }}>
@@ -556,14 +553,14 @@ const Integrations = () => {
                                                 ))}
                                             </div>
                                             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                                                <input type="text" placeholder={t.language === 'ar' ? 'اسم المنتج' : 'Name'} value={newProduct.name}
-                                                    onChange={e => setNewProduct({ ...newProduct, name: e.target.value })}
+                                                <input type="text" placeholder={t.language === 'ar' ? 'اسم المنتج' : 'Product name'} value={newProduct.name}
+                                                    onChange={e => setNewProduct(prev => ({ ...prev, name: e.target.value }))}
                                                     style={{ flex: 2, padding: '10px', borderRadius: '8px', border: '1px solid #ddd' }} />
                                                 <input type="text" placeholder={t.language === 'ar' ? 'السعر' : 'Price'} value={newProduct.price}
-                                                    onChange={e => setNewProduct({ ...newProduct, price: e.target.value })}
+                                                    onChange={e => setNewProduct(prev => ({ ...prev, price: e.target.value }))}
                                                     style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #ddd' }} />
                                                 <button type="button" onClick={addProductToCommand}
-                                                    style={{ width: '42px', height: '42px', background: '#26A5E4', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
+                                                    style={{ width: '42px', height: '42px', background: '#26A5E4', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1.1rem' }}>
                                                     <i className="fas fa-plus" />
                                                 </button>
                                             </div>

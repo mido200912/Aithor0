@@ -6,8 +6,8 @@ import { fetchAiResponse } from '../utils/corexHelper.js';
 // تتبع الرسائل المعالجة لمنع التكرار
 const processedMessages = new Set();
 
-// تتبع حالات الطلب المؤقتة
-const orderSessions = {}; 
+// تتبع حالات الطلب المؤقتة (في الانتاج يفضل Redis)
+const orderSessions = {};
 
 // ─── Helper: send Telegram message ──────────────────────────────────────────
 async function tgSend(botToken, chatId, text, extra = {}) {
@@ -19,8 +19,8 @@ async function tgSend(botToken, chatId, text, extra = {}) {
     });
 }
 
-// ─── Helper: send Telegram message with inline product buttons ───────────────
-async function tgSendProductMenu(botToken, chatId, products, introText = 'اختر المنتج الذي تريده:') {
+// ─── Helper: send product menu with inline buttons ──────────────────────────
+async function tgSendProductMenu(botToken, chatId, products, introText = 'اختر المنتج:') {
     const keyboard = products.map(p => ([{
         text: `${p.name}${p.price ? ` - ${p.price}` : ''}`,
         callback_data: `order:${p.name}`
@@ -34,14 +34,14 @@ async function tgSendProductMenu(botToken, chatId, products, introText = 'اخت
     });
 }
 
-// ─── Save chat message to DB ──────────────────────────────────────────────────
+// ─── Save chat message to DB ────────────────────────────────────────────────
 async function saveChatMsg(companyId, userId, text, sender, platform = 'telegram') {
     const CompanyChat = (await import('../models/CompanyChat.js')).default;
     await CompanyChat.create({ company: companyId, user: userId, text, sender, platform });
 }
 
 /**
- * معالج الرسائل الواردة من WhatsApp
+ * WhatsApp Webhook Handler
  */
 export const handleWhatsAppMessage = async (body) => {
     try {
@@ -110,20 +110,17 @@ export const handleWhatsAppMessage = async (body) => {
 };
 
 /**
- * معالج الرسائل الواردة من Telegram
- * يدعم:
- *  - أوامر AI (الرد التلقائي بالذكاء الاصطناعي)
- *  - أوامر fixed_message (رسالة ثابتة من الشركة)
- *  - أوامر product_menu (قائمة منتجات بأزرار)
- *  - callback_query (لما العميل يضغط على زر منتج)
- *  - رسائل عادية (AI)
+ * Telegram Webhook Handler
+ * Supports: AI replies, fixed messages, product menus, callback queries, phone validation
  */
 export const handleTelegramWebhook = async (req, res) => {
     try {
         const { companyId } = req.params;
         const body = req.body;
 
-        // ── Handle Callback Query (button click) ──────────────────────────────
+        // ══════════════════════════════════════════════════════════════════════
+        // ══ CALLBACK QUERY (button click on product) ═════════════════════════
+        // ══════════════════════════════════════════════════════════════════════
         if (body.callback_query) {
             const cb = body.callback_query;
             const chatId = cb.message.chat.id;
@@ -131,39 +128,42 @@ export const handleTelegramWebhook = async (req, res) => {
             const user = cb.from?.username || cb.from?.first_name || 'عميل';
             const userId = chatId.toString();
 
-            // Answer callback to remove loading spinner
-            // We'll move the answerCallbackQuery down where we have the botToken context
-            // or we'll fetch it here if needed.
-            // For now, let's just make sure we don't use the placeholder.
-
             if (data.startsWith('order:')) {
                 const productName = data.replace('order:', '');
 
+                // Use lean() for reading only - we don't need Mongoose methods here
                 const integration = await Integration.findOne({
                     company: companyId,
                     platform: 'telegram',
                     isActive: true
-                }).populate('company').lean();
+                }).lean();
 
                 if (!integration) return res.sendStatus(200);
 
                 const botToken = integration.credentials.botToken;
 
-                // Answer callback to remove loading spinner using the correct token
+                // Answer callback to remove loading spinner
                 await axios.post(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
                     callback_query_id: cb.id
                 }).catch(() => {});
 
-                // Start Order Session - Instead of saving immediately, wait for phone number
-                orderSessions[chatId] = { 
-                    productName, 
-                    customerName: user, 
-                    userId, 
-                    successMessage: commandConfig.successMessage, 
-                    timestamp: Date.now() 
+                // Find the command config that has this product to get successMessage
+                const matchedCmd = (integration.settings?.commands || []).find(c =>
+                    c.type === 'product_menu' && (c.products || []).some(p => p.name === productName)
+                );
+                const successMessage = matchedCmd?.successMessage || '';
+
+                // Start Order Session - wait for phone number
+                orderSessions[chatId] = {
+                    productName,
+                    customerName: user,
+                    userId,
+                    companyId,
+                    successMessage,
+                    timestamp: Date.now()
                 };
 
-                // Reply to user requesting phone number
+                // Ask for phone number
                 const requestPhoneMsg = `جميل جداً! أنت اخترت: <b>${productName}</b>.\n\nمن فضلك أرسل <b>رقم الموبايل</b> الخاص بك (11 رقم) لتأكيد طلبك وسنتواصل معك فوراً. 📱`;
                 await tgSend(botToken, chatId, requestPhoneMsg);
                 await saveChatMsg(companyId, userId, requestPhoneMsg, 'ai');
@@ -172,7 +172,9 @@ export const handleTelegramWebhook = async (req, res) => {
             return res.sendStatus(200);
         }
 
-        // ── Handle Regular Message ────────────────────────────────────────────
+        // ══════════════════════════════════════════════════════════════════════
+        // ══ REGULAR MESSAGE ═══════════════════════════════════════════════════
+        // ══════════════════════════════════════════════════════════════════════
         if (!body.message) return res.sendStatus(200);
 
         const chatId = body.message.chat.id;
@@ -180,20 +182,21 @@ export const handleTelegramWebhook = async (req, res) => {
         const user = body.message.from?.username || body.message.from?.first_name || 'مستخدم تليجرام';
         const userId = chatId.toString();
 
+        // Deduplicate messages
         const messageId = `tg_${body.message.message_id}`;
         if (processedMessages.has(messageId)) return res.sendStatus(200);
         processedMessages.add(messageId);
         if (processedMessages.size > 1000) processedMessages.delete(processedMessages.values().next().value);
 
+        // Get integration data (lean for reading)
         const integration = await Integration.findOne({
             company: companyId,
             platform: 'telegram',
             isActive: true
-        }).populate('company').lean();
+        }).lean();
 
-        if (!integration || !integration.company) return res.sendStatus(200);
+        if (!integration) return res.sendStatus(200);
 
-        const company = integration.company;
         const botToken = integration.credentials.botToken;
 
         // ── CHECK: Order Session (Waiting for phone) ────────────────────────
@@ -203,121 +206,120 @@ export const handleTelegramWebhook = async (req, res) => {
             const isValidPhone = phoneRegex.test(text.trim());
 
             if (!isValidPhone) {
-                const errorMsg = `❌ ده مش رقم و لازم الرقم يتكون من 11 رقم بالضبط.\n\nمن فضلك أرسل الرقم الصحيح لطلب: ${session.productName}`;
+                const errorMsg = `❌ ده مش رقم صحيح. لازم الرقم يتكون من 11 رقم بالضبط (أرقام فقط).\n\nمن فضلك أرسل الرقم الصحيح لطلب: ${session.productName}`;
                 await tgSend(botToken, chatId, errorMsg);
                 return res.sendStatus(200);
             }
 
             // Phone is valid! Complete the order
             const phoneNumber = text.trim();
-            company.requests.push({
-                customerName: `${session.customerName} (${phoneNumber})`,
-                product: session.productName,
-                message: `📦 طلب جديد!\nالمنتج: ${session.productName}\nالعميل: @${session.customerName}\nرقم الموبايل: ${phoneNumber}`,
-                date: new Date()
-            });
-            await company.save();
 
-            await saveChatMsg(company._id, userId, `رقم الموبايل: ${phoneNumber}`, 'user');
-            
-            // Send Confirmation (Custom or Default fallback)
+            // Save order to dashboard (use Company model directly, NOT lean object)
+            const companyDoc = await Company.findById(companyId);
+            if (companyDoc) {
+                companyDoc.requests.push({
+                    customerName: `${session.customerName} (${phoneNumber})`,
+                    product: session.productName,
+                    message: `📦 طلب جديد!\nالمنتج: ${session.productName}\nالعميل: @${session.customerName}\nرقم الموبايل: ${phoneNumber}`,
+                    date: new Date()
+                });
+                await companyDoc.save();
+            }
+
+            await saveChatMsg(companyId, userId, `رقم الموبايل: ${phoneNumber}`, 'user');
+
+            // Send Confirmation (Custom or Default)
             let confirmMsg = session.successMessage || `✅ تم بنجاح طلب <b>${session.productName}</b>!\n\nسيتواصل معك فريقنا قريباً على الرقم: ${phoneNumber}\nشكراً لك! 🙏`;
-            
-            // Replace generic placeholders if user used them
             confirmMsg = confirmMsg.replace('{{product}}', session.productName).replace('{{phone}}', phoneNumber);
 
             await tgSend(botToken, chatId, confirmMsg);
-            await saveChatMsg(company._id, userId, confirmMsg, 'ai');
+            await saveChatMsg(companyId, userId, confirmMsg, 'ai');
 
             delete orderSessions[chatId];
             return res.sendStatus(200);
         }
 
-        // ── Normalize text for matching ──────────────────────────────────────
-        const cleanText = text.trim().toLowerCase().replace('/', '');
-        
         // ── Match Command ────────────────────────────────────────────────────
-        const commandConfig = (integration.settings?.commands || []).find(c =>
-            cleanText === c.command || text.startsWith(`/${c.command} `) || text === `/${c.command}`
+        const cleanText = text.trim().toLowerCase().replace('/', '');
+        const commands = integration.settings?.commands || [];
+        const commandConfig = commands.find(c =>
+            cleanText === c.command || text === `/${c.command}`
         );
 
         if (commandConfig) {
-            console.log(`🎯 Command matched: ${commandConfig.command} | Type: ${commandConfig.type}`);
+            console.log(`🎯 Command matched: ${commandConfig.command} | Type: ${commandConfig.type} | Products: ${(commandConfig.products || []).length}`);
             const cmdType = commandConfig.type || 'ai';
 
             // Save incoming command to chat history
-            await saveChatMsg(company._id, userId, text, 'user');
+            await saveChatMsg(companyId, userId, text, 'user');
 
             if (cmdType === 'fixed_message') {
-                // Send the preset message the company configured
                 const replyMsg = commandConfig.message || `مرحباً! أنت في قسم: ${commandConfig.category || commandConfig.description}.`;
                 await tgSend(botToken, chatId, replyMsg);
-                await saveChatMsg(company._id, userId, replyMsg, 'ai');
+                await saveChatMsg(companyId, userId, replyMsg, 'ai');
 
                 // Save as dashboard request
-                company.requests.push({
-                    customerName: user,
-                    product: commandConfig.category || commandConfig.command,
-                    message: text,
-                    date: new Date()
-                });
-                await company.save();
-
-            } else if (cmdType === 'product_menu') {
-                // Show inline product buttons
-                const products = commandConfig.products || [];
-                if (products.length === 0) {
-                    await tgSend(botToken, chatId, `عذراً، لا توجد منتجات متاحة حالياً للأمر (/${commandConfig.command}).\n[Debug JSON: ${JSON.stringify(commandConfig)}]`);
-                    return res.sendStatus(200);
-                } else {
-                    const introText = commandConfig.message || `🛍️ اختر المنتج الذي تريده من <b>${commandConfig.category || 'قائمتنا'}</b>:`;
-                    await tgSendProductMenu(botToken, chatId, products, introText);
-                    await saveChatMsg(company._id, userId, introText, 'ai');
+                const companyDoc = await Company.findById(companyId);
+                if (companyDoc) {
+                    companyDoc.requests.push({
+                        customerName: user,
+                        product: commandConfig.category || commandConfig.command,
+                        message: text,
+                        date: new Date()
+                    });
+                    await companyDoc.save();
                 }
 
+            } else if (cmdType === 'product_menu') {
+                const products = commandConfig.products || [];
+                if (products.length === 0) {
+                    await tgSend(botToken, chatId, `عذراً، لا توجد منتجات متاحة حالياً.`);
+                    return res.sendStatus(200);
+                }
+                const introText = commandConfig.message || `🛍️ اختر المنتج الذي تريده من <b>${commandConfig.category || 'قائمتنا'}</b>:`;
+                await tgSendProductMenu(botToken, chatId, products, introText);
+                await saveChatMsg(companyId, userId, introText, 'ai');
+
             } else {
-                // ai type - let AI answer
+                // AI type
+                const companyDoc = await Company.findById(companyId);
                 const context = `
-أنت مساعد ذكي تمثل شركة "${company.name}".
-المجال: ${company.industry || "غير محدد"}.
-${company.description || ""}
+أنت مساعد ذكي تمثل شركة "${companyDoc?.name || 'الشركة'}".
+المجال: ${companyDoc?.industry || "غير محدد"}.
+${companyDoc?.description || ""}
 تحدث بالعربية.
                 `.trim();
                 const reply = await fetchAiResponse(`${context}\n\nUser Question:\n${text}`);
                 await tgSend(botToken, chatId, reply);
-                await saveChatMsg(company._id, userId, reply, 'ai');
+                await saveChatMsg(companyId, userId, reply, 'ai');
 
-                // Save as request
-                company.requests.push({
-                    customerName: user,
-                    product: commandConfig.category || commandConfig.command,
-                    message: text,
-                    date: new Date()
-                });
-                await company.save();
+                if (companyDoc) {
+                    companyDoc.requests.push({
+                        customerName: user,
+                        product: commandConfig.category || commandConfig.command,
+                        message: text,
+                        date: new Date()
+                    });
+                    await companyDoc.save();
+                }
             }
 
             return res.sendStatus(200);
         }
 
-        // ── No command matched → AI reply ─────────────────────────────────────
+        // ── No command matched → Default AI reply ───────────────────────────
+        const companyDoc = await Company.findById(companyId);
         const context = `
-أنت مساعد ذكي تمثل شركة "${company.name}".
-المجال: ${company.industry || "غير محدد"}.
-وصف الشركة: ${company.description || "لا يوجد وصف"}.
+أنت مساعد ذكي تمثل شركة "${companyDoc?.name || 'الشركة'}".
+المجال: ${companyDoc?.industry || "غير محدد"}.
+وصف الشركة: ${companyDoc?.description || "لا يوجد وصف"}.
 تحدث بالعربية بأسلوب مهذب ومفيد عبر تليجرام.
         `.trim();
 
-        // Save user message
-        await saveChatMsg(company._id, userId, text, 'user');
-
+        await saveChatMsg(companyId, userId, text, 'user');
         const reply = await fetchAiResponse(`${context}\n\nUser Question:\n${text}`);
-
-        // Reply via Telegram
         await tgSend(botToken, chatId, reply);
-
-        // Save AI reply
-        await saveChatMsg(company._id, userId, reply, 'ai');
+        await saveChatMsg(companyId, userId, reply, 'ai');
 
         res.sendStatus(200);
     } catch (error) {

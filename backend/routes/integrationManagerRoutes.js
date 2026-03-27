@@ -185,6 +185,9 @@ router.post('/telegram', requireAuth, async (req, res) => {
             return res.status(400).json({ error: tgErrMsg });
         }
 
+        // Log received commands for debugging
+        console.log('📥 Received commands from frontend:', JSON.stringify(commands, null, 2));
+
         // Sanitize and fully preserve all command fields
         const sanitizedSettingsCommands = (commands || []).map(c => ({
             command: (c.command || '').toLowerCase().replace(/[^a-z0-9_]/g, ''),
@@ -193,8 +196,10 @@ router.post('/telegram', requireAuth, async (req, res) => {
             type: c.type || 'ai',
             message: c.message || '',
             successMessage: c.successMessage || '',
-            products: c.products || [] // Keep original products array from frontend
+            products: c.products || []
         }));
+
+        console.log('💾 Saving sanitized commands:', JSON.stringify(sanitizedSettingsCommands, null, 2));
 
         // Fix nested array saving by switching to findOne + save()
         let integration = await Integration.findOne({ company: company._id, platform: 'telegram' });
