@@ -164,6 +164,11 @@ const Integrations = () => {
             
             // Auto-include the current unsaved command
             if (currentCmd.command && currentCmd.command.trim() !== '') {
+                // Validate: product_menu needs at least 3 products
+                if (currentCmd.type === 'product_menu' && (currentCmd.products || []).length < 3) {
+                    alert(t.language === 'ar' ? '⚠️ يجب إضافة 3 منتجات على الأقل لقائمة المنتجات!' : '⚠️ Product menu requires at least 3 products!');
+                    return;
+                }
                 finalCommands.push({ ...currentCmd });
             }
 
@@ -221,6 +226,11 @@ const Integrations = () => {
         // Read from REF (always latest) not from state
         const currentCmd = newCommandRef.current;
         if (!currentCmd.command) return;
+        // Validate: product_menu needs at least 3 products
+        if (currentCmd.type === 'product_menu' && (currentCmd.products || []).length < 3) {
+            alert(t.language === 'ar' ? '⚠️ يجب إضافة 3 منتجات على الأقل لقائمة المنتجات!' : '⚠️ Product menu requires at least 3 products!');
+            return;
+        }
         console.log("✅ Adding command from ref:", JSON.stringify(currentCmd));
         setTelegramData(prev => ({
             ...prev,

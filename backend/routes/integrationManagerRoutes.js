@@ -201,6 +201,12 @@ router.post('/telegram', requireAuth, async (req, res) => {
 
         console.log('💾 Saving sanitized commands:', JSON.stringify(sanitizedSettingsCommands, null, 2));
 
+        // Validate: product_menu commands must have at least 3 products
+        const invalidCmd = sanitizedSettingsCommands.find(c => c.type === 'product_menu' && (c.products || []).length < 3);
+        if (invalidCmd) {
+            return res.status(400).json({ error: `Command /${invalidCmd.command} requires at least 3 products.` });
+        }
+
         // Fix nested array saving by switching to findOne + save()
         let integration = await Integration.findOne({ company: company._id, platform: 'telegram' });
         
@@ -226,5 +232,4 @@ router.post('/telegram', requireAuth, async (req, res) => {
         res.status(500).json({ error: 'Server error configure Telegram' });
     }
 });
-
 export default router;
