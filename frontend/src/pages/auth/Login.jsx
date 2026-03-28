@@ -26,7 +26,15 @@ const Login = () => {
                     client_id: GOOGLE_CLIENT_ID,
                     callback: handleGoogleResponse
                 });
-                // Note: The button is rendered via the HTML API below
+
+                // Render the button explicitly
+                const buttonParent = document.getElementById('google-login-btn');
+                if (buttonParent) {
+                    window.google?.accounts.id.renderButton(
+                        buttonParent,
+                        { theme: "outline", size: "large", width: 350, shape: "rectangular" }
+                    );
+                }
             };
         }
     }, []);
@@ -154,18 +162,8 @@ const Login = () => {
                         </div>
 
                         <div className="social-login-buttons">
-                            {/* Google Button Container */}
-                            <div 
-                                id="google-login-btn"
-                                className="g_id_signin"
-                                data-type="standard"
-                                data-shape="rectangular"
-                                data-theme="outline"
-                                data-text="signin_with"
-                                data-size="large"
-                                data-logo_alignment="left"
-                                data-width="100%"
-                            ></div>
+                            {/* Google Button Parent Container */}
+                            <div id="google-login-btn" style={{ width: '100%', display: 'flex', justifyContent: 'center' }}></div>
                         </div>
                     </form>
                 ) : (
