@@ -21,10 +21,23 @@ dotenv.config();
 const app = express();
 
 // ✅ إعداد CORS
+const allowedOrigins = [
+    "http://localhost:5173",
+    "https://aithor-v1.vercel.app",
+    "https://aithor0.vercel.app"
+];
+
 app.use(cors({
-    origin: "*",
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.indexOf(origin) !== -1 || origin === "*") {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "ngrok-skip-browser-warning"],
+    credentials: true,
 }));
 
 // 🛑 إعداد Raw Body للـ Webhooks
@@ -37,8 +50,10 @@ app.use(express.json());
 
 // ✅ إعداد حماية أكبر للموقع (Security Middlewares)
 // 1. Set security HTTP headers
-app.use(helmet());
-app.use(helmet.crossOriginResourcePolicy({ policy: "cross-origin" }));
+app.use(helmet({
+    crossOriginOpenerPolicy: { policy: "unsafe-none" }, // Necessary for Google OAuth popup
+    crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 
 // security plugins are trimmed down since xss-clean and mongoSanitize are fundamentally incompatible with Express 5 req.query.
 

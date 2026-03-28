@@ -14,7 +14,8 @@ const Login = () => {
 
     // Initialize Google Login
     useEffect(() => {
-        if (GOOGLE_CLIENT_ID) {
+        if (GOOGLE_CLIENT_ID && !window.googleInitStarted) {
+            window.googleInitStarted = true;
             const script = document.createElement('script');
             script.src = "https://accounts.google.com/gsi/client";
             script.async = true;
@@ -32,7 +33,7 @@ const Login = () => {
                 if (buttonParent) {
                     window.google?.accounts.id.renderButton(
                         buttonParent,
-                        { theme: "outline", size: "large", width: 350, shape: "rectangular" }
+                        { theme: "outline", size: "large", width: 320, shape: "rectangular" }
                     );
                 }
             };
