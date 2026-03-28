@@ -76,6 +76,14 @@ const Integrations = () => {
     const [newCommand, setNewCommand] = useState({ command: '', description: '', category: '', type: 'ai', message: '', successMessage: '', products: [] });
     const [newProduct, setNewProduct] = useState({ name: '', price: '', description: '' });
 
+    // Reveal Token state
+    const [revealOtpVisible, setRevealOtpVisible] = useState(false);
+    const [revealOtpCode, setRevealOtpCode] = useState('');
+    const [isRequestingOtp, setIsRequestingOtp] = useState(false);
+    const [isVerifyingRevealOtp, setIsVerifyingRevealOtp] = useState(false);
+    const [isTelegramTokenRevealed, setIsTelegramTokenRevealed] = useState(false);
+    const [isTelegramEditing, setIsTelegramEditing] = useState(false);
+
     // useRef always holds the LATEST value - immune to stale closures
     const newCommandRef = useRef(newCommand);
     useEffect(() => { newCommandRef.current = newCommand; }, [newCommand]);
@@ -206,6 +214,8 @@ const Integrations = () => {
                 window.location.href = `${BACKEND_URL}/integrations/shopify/login?shop=${shopUrl}&companyId=${companyId}`;
             }
             else if (integration.id === 'telegram') {
+                setIsTelegramEditing(false);
+                setIsTelegramTokenRevealed(false);
                 setShowTelegramModal(true);
             }
         } catch (error) {
@@ -356,8 +366,11 @@ const Integrations = () => {
         if (!integration) return;
 
         if (platformId === 'telegram') {
+            setIsTelegramEditing(true);
+            setIsTelegramTokenRevealed(false);
+            setRevealOtpVisible(false);
             setTelegramData({
-                botToken: integration.settings?.botToken || integration.credentials?.botToken || '',
+                botToken: '', // Hide by default
                 commands: integration.settings?.commands || []
             });
             setShowTelegramModal(true);
@@ -367,6 +380,45 @@ const Integrations = () => {
                 accessToken: integration.credentials?.accessToken || ''
             });
             setShowWhatsappModal(true);
+        }
+    };
+
+    const requestRevealOtp = async () => {
+        setIsRequestingOtp(true);
+        try {
+            await axios.post(`${BACKEND_URL}/integration-manager/request-reveal-otp`, {}, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setRevealOtpVisible(true);
+            showToast('success', t.language === 'ar' ? 'تم إرسال الكود!' : 'OTP Sent!', t.language === 'ar' ? 'تفقد بريدك الإلكتروني.' : 'Check your email for the verification code.');
+        } catch (error) {
+            console.error('Error requesting reveal OTP:', error);
+            showToast('error', t.language === 'ar' ? 'فشل إرسال الكود' : 'Failed to send OTP');
+        } finally {
+            setIsRequestingOtp(false);
+        }
+    };
+
+    const verifyRevealOtp = async () => {
+        if (!revealOtpCode) return;
+        setIsVerifyingRevealOtp(true);
+        try {
+            const res = await axios.post(`${BACKEND_URL}/integration-manager/verify-reveal-otp`, {
+                otp: revealOtpCode,
+                platform: 'telegram'
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            
+            setTelegramData(prev => ({ ...prev, botToken: res.data.botToken }));
+            setIsTelegramTokenRevealed(true);
+            setRevealOtpVisible(false);
+            showToast('success', t.language === 'ar' ? 'تم التحقق!' : 'Verified!', t.language === 'ar' ? 'تم كشف التوكن.' : 'Token revealed successfully.');
+        } catch (error) {
+            console.error('Error verifying reveal OTP:', error);
+            showToast('error', t.language === 'ar' ? 'كود غير صحيح' : 'Invalid OTP');
+        } finally {
+            setIsVerifyingRevealOtp(false);
         }
     };
 
@@ -385,6 +437,14 @@ const Integrations = () => {
             console.error('Error disconnecting integration:', error);
             showToast('error', t.language === 'ar' ? 'خطأ' : 'Error', t.dashboard.integrationsPage.errorDisconnect);
         }
+    };
+
+    const closeTelegramModal = () => {
+        setShowTelegramModal(false);
+        setIsTelegramEditing(false);
+        setIsTelegramTokenRevealed(false);
+        setRevealOtpVisible(false);
+        setRevealOtpCode('');
     };
 
     const containerVariants = {
@@ -577,7 +637,7 @@ const Integrations = () => {
 
             {/* Telegram Modal */}
             {showTelegramModal && (
-                <div className="modal-overlay" onClick={() => setShowTelegramModal(false)}>
+                <div className="modal-overlay" onClick={closeTelegramModal}>
                     <div className="modal-content telegram-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '650px' }}>
                         <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <i className="fab fa-telegram" style={{ color: '#26A5E4' }} />
@@ -590,14 +650,51 @@ const Integrations = () => {
                         }}>
                             <div className="form-group">
                                 <label>{t.language === 'ar' ? 'Bot Token (من @BotFather)' : 'Bot Token (from @BotFather)'}</label>
-                                <input
-                                    type="text"
-                                    required
-                                    placeholder="123456789:ABCDefghIJKlmnoPQRstUVwxYZ"
-                                    value={telegramData.botToken}
-                                    onChange={(e) => setTelegramData(prev => ({ ...prev, botToken: e.target.value }))}
-                                    style={{ borderRadius: '10px', padding: '10px 14px', border: '1px solid #ddd' }}
-                                />
+                                
+                                {isTelegramEditing && !isTelegramTokenRevealed ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                        {!revealOtpVisible ? (
+                                            <button 
+                                                type="button" 
+                                                className="btn btn-outline"
+                                                onClick={requestRevealOtp}
+                                                disabled={isRequestingOtp}
+                                                style={{ width: '100%', height: '45px', borderStyle: 'dashed' }}
+                                            >
+                                                {isRequestingOtp ? <i className="fas fa-spinner fa-spin" /> : <i className="fas fa-eye" style={{ marginInlineEnd: '8px' }} />}
+                                                {t.language === 'ar' ? 'كشف الـ Token (يتطلب OTP)' : 'Reveal Token (Requires OTP)'}
+                                            </button>
+                                        ) : (
+                                            <div style={{ display: 'flex', gap: '8px' }}>
+                                                <input
+                                                    type="text"
+                                                    placeholder={t.language === 'ar' ? 'أدخل الكود (6 أرقام)' : 'Enter Code (6 digits)'}
+                                                    value={revealOtpCode}
+                                                    onChange={(e) => setRevealOtpCode(e.target.value)}
+                                                    style={{ flex: 1, borderRadius: '10px', padding: '10px 14px', border: '1px solid #26A5E4' }}
+                                                />
+                                                <button 
+                                                    type="button" 
+                                                    className="btn btn-primary"
+                                                    onClick={verifyRevealOtp}
+                                                    disabled={isVerifyingRevealOtp}
+                                                    style={{ background: '#26A5E4', padding: '0 20px' }}
+                                                >
+                                                    {isVerifyingRevealOtp ? <i className="fas fa-spinner fa-spin" /> : (t.language === 'ar' ? 'تأكيد' : 'Verify')}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <input
+                                        type="text"
+                                        required
+                                        placeholder="123456789:ABCDefghIJKlmnoPQRstUVwxYZ"
+                                        value={telegramData.botToken}
+                                        onChange={(e) => setTelegramData(prev => ({ ...prev, botToken: e.target.value }))}
+                                        style={{ width: '100%', borderRadius: '10px', padding: '10px 14px', border: '1px solid #ddd' }}
+                                    />
+                                )}
                             </div>
 
                             <div style={{ marginTop: '25px', borderTop: '2px solid #f0f0f0', paddingTop: '20px' }}>
@@ -718,7 +815,7 @@ const Integrations = () => {
                             </div>
 
                             <div className="modal-actions" style={{ marginTop: '30px' }}>
-                                <button type="button" className="btn btn-outline" onClick={() => setShowTelegramModal(false)}>
+                                <button type="button" className="btn btn-outline" onClick={closeTelegramModal}>
                                     {t.dashboard.integrationsPage.whatsappCancel || 'Cancel'}
                                 </button>
                                 <button type="submit" className="btn btn-primary" style={{ background: '#26A5E4', borderColor: '#26A5E4' }}>

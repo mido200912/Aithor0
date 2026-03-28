@@ -3,6 +3,9 @@ import axios from 'axios';
 import { requireAuth } from '../middleware/auth.js';
 import Integration from '../models/Integration.js';
 import Company from '../models/company.js';
+import User from '../models/User.js';
+import sendEmail from '../utils/sendEmail.js';
+import { generateOtpEmail } from '../utils/emailTemplate.js';
 
 const router = express.Router();
 
@@ -25,8 +28,9 @@ router.get('/', requireAuth, async (req, res) => {
             isActive: int.isActive,
             createdAt: int.createdAt,
             settings: int.settings,
-            // Don't expose sensitive credentials
-            hasCredentials: !!(int.credentials && int.credentials.accessToken)
+            // Don't expose sensitive credentials directly
+            hasCredentials: !!(int.credentials && (int.credentials.accessToken || int.credentials.botToken || int.credentials.phoneNumberId)),
+            hasTelegramToken: !!(int.credentials && int.credentials.botToken)
         }));
 
         res.json(formattedIntegrations);
@@ -232,4 +236,73 @@ router.post('/telegram', requireAuth, async (req, res) => {
         res.status(500).json({ error: 'Server error configure Telegram' });
     }
 });
+
+// @route   POST /api/integration-manager/request-reveal-otp
+// @desc    Send OTP to user email to reveal sensitive bot token
+// @access  Private
+router.post('/request-reveal-otp', requireAuth, async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        user.otp = otp;
+        user.otpExpires = Date.now() + 10 * 60 * 1000; // 10 mins
+        await user.save();
+
+        const html = generateOtpEmail(
+            "Security Verification",
+            "You requested to reveal your Telegram Bot Token. Please use the code below to verify your identity.",
+            otp
+        );
+
+        await sendEmail({
+            email: user.email,
+            subject: "AiThor Security - Bot Token Access",
+            message: `Your verification code is: ${otp}`,
+            html
+        });
+
+        res.json({ message: 'OTP sent to your email' });
+    } catch (error) {
+        console.error('OTP request error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// @route   POST /api/integration-manager/verify-reveal-otp
+// @desc    Verify OTP and return the actual bot token
+// @access  Private
+router.post('/verify-reveal-otp', requireAuth, async (req, res) => {
+    try {
+        const { otp, platform } = req.body;
+        if (!otp) return res.status(400).json({ error: 'OTP is required' });
+
+        const user = await User.findById(req.user.id);
+        if (!user || user.otp !== otp || user.otpExpires < Date.now()) {
+            return res.status(400).json({ error: 'Invalid or expired OTP' });
+        }
+
+        // OTP is valid, clear it
+        user.otp = undefined;
+        user.otpExpires = undefined;
+        await user.save();
+
+        // Get the integration
+        const company = await Company.findOne({ owner: user._id });
+        const integration = await Integration.findOne({ company: company._id, platform: platform || 'telegram' });
+
+        if (!integration) return res.status(404).json({ error: 'Integration not found' });
+
+        res.json({ 
+            botToken: integration.credentials?.botToken,
+            accessToken: integration.credentials?.accessToken,
+            phoneNumberId: integration.credentials?.phoneNumberId
+        });
+    } catch (error) {
+        console.error('OTP verification error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
 export default router;
