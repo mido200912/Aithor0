@@ -2,6 +2,7 @@ import axios from 'axios';
 import Integration from '../models/Integration.js';
 import Company from '../models/company.js';
 import { fetchAiResponse } from '../utils/corexHelper.js';
+import { getChatHistory, formatHistoryForPrompt } from '../utils/chatHistoryHelper.js';
 
 // تتبع الرسائل المعالجة لمنع التكرار
 const processedMessages = new Set();
@@ -84,7 +85,10 @@ export const handleWhatsAppMessage = async (body) => {
 تحدث بالعربية وكأنك ممثل حقيقي للشركة. كن مفيداً ومهذباً.
                         `.trim();
 
-                        const reply = await fetchAiResponse(`${context}\n\nUser Question:\n${messageText}`);
+                        const history = await getChatHistory(company._id, from, 'whatsapp', 5);
+                        const historyContext = formatHistoryForPrompt(history);
+
+                        const reply = await fetchAiResponse(`${context}\n\n${historyContext}User Question:\n${messageText}`);
 
                         const CompanyChat = (await import('../models/CompanyChat.js')).default;
                         await CompanyChat.create({ company: company._id, user: from, text: messageText, sender: 'user', platform: 'whatsapp' });
@@ -289,7 +293,9 @@ export const handleTelegramWebhook = async (req, res) => {
 ${companyDoc?.description || ""}
 تحدث بالعربية.
                 `.trim();
-                const reply = await fetchAiResponse(`${context}\n\nUser Question:\n${text}`);
+                const history = await getChatHistory(companyId, userId, 'telegram', 5);
+                const historyContext = formatHistoryForPrompt(history);
+                const reply = await fetchAiResponse(`${context}\n\n${historyContext}User Question:\n${text}`);
                 await tgSend(botToken, chatId, reply);
                 await saveChatMsg(companyId, userId, reply, 'ai');
 
@@ -317,7 +323,9 @@ ${companyDoc?.description || ""}
         `.trim();
 
         await saveChatMsg(companyId, userId, text, 'user');
-        const reply = await fetchAiResponse(`${context}\n\nUser Question:\n${text}`);
+        const history = await getChatHistory(companyId, userId, 'telegram', 5);
+        const historyContext = formatHistoryForPrompt(history);
+        const reply = await fetchAiResponse(`${context}\n\n${historyContext}User Question:\n${text}`);
         await tgSend(botToken, chatId, reply);
         await saveChatMsg(companyId, userId, reply, 'ai');
 

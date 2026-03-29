@@ -3,6 +3,8 @@ import axios from "axios";
 import { requireAuth } from "../middleware/auth.js";
 import Company from "../models/company.js";
 import { extractCorexReply, fetchAiResponse } from "../utils/corexHelper.js";
+import { getChatHistory, formatHistoryForPrompt } from "../utils/chatHistoryHelper.js";
+import CompanyChat from "../models/CompanyChat.js";
 
 const router = express.Router();
 
@@ -60,10 +62,36 @@ router.post("/", requireAuth, async (req, res) => {
       context = parts.join("\n");
     }
 
-    const fullQuestion = `${context}\n\nUser Question:\n${prompt}`;
+    // Save user message to history
+    if (company) {
+        await CompanyChat.create({
+            company: company._id,
+            user: req.user._id.toString(),
+            text: prompt,
+            sender: 'user',
+            platform: 'web'
+        });
+    }
+
+    const history = await getChatHistory(company?._id, req.user._id.toString(), 'web', 5);
+    const historyContext = formatHistoryForPrompt(history);
+
+    const fullQuestion = `${context}\n\n${historyContext}User Question:\n${prompt}`;
     
     // استخدام الدالة الموحدة المدمج بها Fallback
     const reply = await fetchAiResponse(fullQuestion, "حدث خطأ أثناء الاتصال بالذكاء الاصطناعي.");
+
+    // Save AI reply to history
+    if (company) {
+        await CompanyChat.create({
+            company: company._id,
+            user: req.user._id.toString(),
+            text: reply,
+            sender: 'ai',
+            platform: 'web'
+        });
+    }
+
     res.json({ reply });
 
   } catch (error) {
