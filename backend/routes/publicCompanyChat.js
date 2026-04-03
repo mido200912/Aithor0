@@ -3,6 +3,8 @@ import express from "express";
 import axios from "axios";
 import Company from "../models/company.js";
 import { extractCorexReply, fetchAiResponse } from "../utils/corexHelper.js";
+import { getChatHistory, formatHistoryForPrompt } from "../utils/chatHistoryHelper.js";
+import { getCompanyAIContext } from "../utils/promptHelper.js";
 
 const router = express.Router();
 
@@ -23,43 +25,16 @@ router.post("/chat", async (req, res) => {
     if (!company)
       return res.status(404).json({ success: false, error: "Invalid company API key" });
 
-    // احضار المنتجات والمشاريع المرتبطة بمالك الشركة
-    const Project = (await import("../models/Project.js")).default;
-    const projects = await Project.find({ owner: company.owner });
+    // 🧠 السياق الموحد
+    const context = await getCompanyAIContext(company);
 
-    // ✅ تجميع بيانات المنتجات
-    const productsInfo = projects.map(p => {
-      return `Project: ${p.name}\nProducts: ${p.products.map(prod => `- ${prod.title} (${prod.price} $)`).join(", ")}`;
-    }).join("\n\n");
+    // 🕒 الحصول على الذاكرة (Memory)
+    const userId = req.body.userId || req.body.sessionId || "Guest/Public";
+    const history = await getChatHistory(company._id, userId, 'web', 5);
+    const historyContext = formatHistoryForPrompt(history);
 
-    // ✨ استخدام extractedKnowledge
-    const knowledgeContext = company.extractedKnowledge ||
-      "لا توجد معلومات إضافية متاحة حالياً.";
-
-    // 🧠 إنشاء السياق الكامل للذكاء الاصطناعي
-    const context = `You are an AI customer service assistant for "${company.name || 'this company'}".
-
-Company Information:
-- Industry: ${company.industry || "N/A"}
-- Description: ${company.description || "No description"}
-- Vision: ${company.vision || "No vision"}
-- Mission: ${company.mission || "No mission"}
-- Values: ${(company.values || []).join(", ") || "No values"}
-
-Available Products/Services:
-${productsInfo || "No specific products listed."}
-
-Knowledge Base (Use this to answer customer questions):
-${knowledgeContext}
-
-Custom Instructions (Follow these):
-${company.customInstructions || "Respond to customers naturally and professionally using the information above. If you don't know something, say so politely."}
-
-Language: Respond in the same language as the customer's query (Arabic or English).
-`;
-
-    // ✅ إرسال الطلب لموديل AI بدلاً من OpenRouter واستخدام Fallback
-    const fullQuestion = `${context}\n\nUser Question:\n${prompt}`;
+    // ✅ إرسال الطلب لموديل AI واستخدام الذاكرة والسياق الموحد
+    const fullQuestion = `${context}\n\n${historyContext}User Question:\n${prompt}`;
     
     // استخدام الدالة الموحدة المدمج بها Fallback
     const reply = await fetchAiResponse(fullQuestion, "لم يتم الحصول على رد من الذكاء الاصطناعي.");
@@ -69,7 +44,7 @@ Language: Respond in the same language as the customer's query (Arabic or Englis
     // Save user message
     await CompanyChat.create({
       company: company._id,
-      user: "Guest/Public",
+      user: userId,
       text: prompt,
       sender: 'user',
       platform: 'web'
@@ -78,7 +53,7 @@ Language: Respond in the same language as the customer's query (Arabic or Englis
     // Save AI response
     await CompanyChat.create({
       company: company._id,
-      user: "Guest/Public",
+      user: userId,
       text: reply,
       sender: 'ai',
       platform: 'web'

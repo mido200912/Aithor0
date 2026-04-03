@@ -3,6 +3,7 @@ import Integration from '../models/Integration.js';
 import Company from '../models/company.js';
 import { fetchAiResponse } from '../utils/corexHelper.js';
 import { getChatHistory, formatHistoryForPrompt } from '../utils/chatHistoryHelper.js';
+import { getCompanyAIContext } from '../utils/promptHelper.js';
 
 // تتبع الرسائل المعالجة لمنع التكرار
 const processedMessages = new Set();
@@ -76,14 +77,7 @@ export const handleWhatsAppMessage = async (body) => {
                         const company = integration.company;
                         const accessToken = integration.credentials.accessToken;
 
-                        const context = `
-أنت مساعد ذكي تمثل شركة "${company.name}".
-المجال: ${company.industry || "غير محدد"}.
-وصف الشركة: ${company.description || "لا يوجد وصف"}.
-الرؤية: ${company.vision || "غير محددة"}.
-الرسالة: ${company.mission || "غير محددة"}.
-تحدث بالعربية وكأنك ممثل حقيقي للشركة. كن مفيداً ومهذباً.
-                        `.trim();
+                        const context = await getCompanyAIContext(company);
 
                         const history = await getChatHistory(company._id, from, 'whatsapp', 5);
                         const historyContext = formatHistoryForPrompt(history);
@@ -287,12 +281,7 @@ export const handleTelegramWebhook = async (req, res) => {
             } else {
                 // AI type
                 const companyDoc = await Company.findById(companyId);
-                const context = `
-أنت مساعد ذكي تمثل شركة "${companyDoc?.name || 'الشركة'}".
-المجال: ${companyDoc?.industry || "غير محدد"}.
-${companyDoc?.description || ""}
-تحدث بالعربية.
-                `.trim();
+                const context = await getCompanyAIContext(companyDoc);
                 const history = await getChatHistory(companyId, userId, 'telegram', 5);
                 const historyContext = formatHistoryForPrompt(history);
                 const reply = await fetchAiResponse(`${context}\n\n${historyContext}User Question:\n${text}`);
@@ -315,12 +304,7 @@ ${companyDoc?.description || ""}
 
         // ── No command matched → Default AI reply ───────────────────────────
         const companyDoc = await Company.findById(companyId);
-        const context = `
-أنت مساعد ذكي تمثل شركة "${companyDoc?.name || 'الشركة'}".
-المجال: ${companyDoc?.industry || "غير محدد"}.
-وصف الشركة: ${companyDoc?.description || "لا يوجد وصف"}.
-تحدث بالعربية بأسلوب مهذب ومفيد عبر تليجرام.
-        `.trim();
+        const context = await getCompanyAIContext(companyDoc);
 
         await saveChatMsg(companyId, userId, text, 'user');
         const history = await getChatHistory(companyId, userId, 'telegram', 5);
