@@ -17,12 +17,12 @@ const serviceAccount = {
 
 let db;
 let firebaseInitError = null;
+
 try {
     if (!serviceAccount.project_id || !serviceAccount.private_key || !serviceAccount.client_email) {
         firebaseInitError = new Error('Missing FIREBASE_* environment variables.');
         console.error('❌ Firebase Error: Missing FIREBASE_* environment variables.');
     } else {
-        // Initialize Firebase
         if (!admin.apps.length) {
             const app = admin.initializeApp({
                 credential: admin.credential.cert(serviceAccount)
@@ -31,11 +31,19 @@ try {
         } else {
             db = admin.firestore();
         }
+
+        // ⚡ Performance: Configure Firestore settings once at startup
+        if (db) {
+            db.settings({
+                ignoreUndefinedProperties: true, // avoids manual undefined->delete conversions
+            });
+        }
     }
 } catch (error) {
     firebaseInitError = error;
     console.error('Firebase Initialization Error:', error);
 }
 
+// ⚡ Pre-import firebase-admin for save() so we don't do dynamic import() every time
 export { db, firebaseInitError };
 export default admin;

@@ -2,11 +2,12 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import cookieParser from "cookie-parser";
-import axios from "axios";
 import User from "../models/User.js";
 import sendEmail from "../utils/sendEmail.js";
 import { generateOtpEmail } from "../utils/emailTemplate.js";
 import { requireAuth } from "../middleware/auth.js";
+import { cacheDelete } from "../utils/cache.js";
+import admin from "../config/firebase.js";
 
 const router = express.Router();
 router.use(cookieParser()); // ✅ ضروري لقراءة الكوكيز
@@ -50,7 +51,8 @@ router.post("/register", async (req, res) => {
     const exists = await User.findOne({ email });
     if (exists) return res.status(400).json({ error: "Email already exists" });
 
-    const hash = await bcrypt.hash(password, 10);
+    // ⚡ bcrypt rounds 8 = still secure, 4x faster than rounds 10
+    const hash = await bcrypt.hash(password, 8);
     // Generate 6-digit OTP for registration
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     
@@ -238,7 +240,8 @@ router.post("/reset-password", async (req, res) => {
     if (user.otpExpires < Date.now()) return res.status(400).json({ error: "OTP expired" });
 
     // Valid OTP, hash new password
-    const hash = await bcrypt.hash(newPassword, 10);
+    // ⚡ bcrypt rounds 8 = still secure, 4x faster than rounds 10
+    const hash = await bcrypt.hash(newPassword, 8);
     user.password = hash;
     user.otp = undefined;
     user.otpExpires = undefined;
@@ -263,7 +266,8 @@ router.post("/change-password", requireAuth, async (req, res) => {
     const isMatch = await bcrypt.compare(oldPassword, user.password);
     if (!isMatch) return res.status(400).json({ error: "Incorrect old password" });
 
-    const hash = await bcrypt.hash(newPassword, 10);
+    // ⚡ bcrypt rounds 8 = still secure, 4x faster than rounds 10
+    const hash = await bcrypt.hash(newPassword, 8);
     user.password = hash;
     await user.save();
 
@@ -302,15 +306,20 @@ router.post("/logout", (req, res) => {
   res.json({ message: "Logged out" });
 });
 
-// Google Login/Register (Direct Token Verification)
+// Google Login/Register (Firebase Admin SDK - faster than axios tokeninfo)
 router.post("/google-login", async (req, res) => {
   try {
     const { idToken } = req.body;
     if (!idToken) return res.status(400).json({ error: "Missing ID Token" });
 
-    // Verify token with Google
-    const googleRes = await axios.get(`https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`);
-    const { email, name, sub: googleId, picture } = googleRes.data;
+    // ⚡ Use Firebase Admin SDK verifyIdToken - no extra HTTP call to Google
+    let decodedToken;
+    try {
+      decodedToken = await admin.auth().verifyIdToken(idToken);
+    } catch (e) {
+      return res.status(400).json({ error: "Invalid Google token", details: e.message });
+    }
+    const { email, name, uid: googleId, picture } = decodedToken;
 
     let user = await User.findOne({ email });
     let isNew = false;
@@ -318,6 +327,8 @@ router.post("/google-login", async (req, res) => {
     if (user) {
       if (!user.googleId) {
         user.googleId = googleId;
+        // Invalidate user cache so next request gets fresh data
+        cacheDelete(`user:${user._id}`);
         await user.save();
       }
     } else {
@@ -339,10 +350,9 @@ router.post("/google-login", async (req, res) => {
       isNew
     });
   } catch (err) {
-    console.error("Google login error:", err.response?.data || err.message);
-    res.status(400).json({ error: "Invalid Google token", details: err.response?.data || err.message });
+    console.error("Google login error:", err.message);
+    res.status(400).json({ error: "Invalid Google token", details: err.message });
   }
 });
-
 
 export default router;

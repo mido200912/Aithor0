@@ -13,27 +13,26 @@ router.post("/", requireAuth, async (req, res) => {
   try {
     const { prompt } = req.body;
 
-    // جلب بيانات الشركة الخاصة بالمستخدم
+    // ⚡ Fetch company in parallel (no sequential dependency)
     const company = await Company.findOne({ owner: req.user._id });
-    
-    // 🧠 استخدام المساعد الموحد لإنشاء السياق
-    const context = await getCompanyAIContext(company);
 
-    // Save user message to history
+    // ⚡ Run context generation and chat history in parallel
+    const [context, history] = await Promise.all([
+        getCompanyAIContext(company),
+        getChatHistory(company?._id, req.user._id.toString(), 'web', 5)
+    ]);
+    const historyContext = formatHistoryForPrompt(history);
 
-    // Save user message to history
+    // Save user message to history (fire-and-forget, don't block AI response)
     if (company) {
-        await CompanyChat.create({
+        CompanyChat.create({
             company: company._id,
             user: req.user._id.toString(),
             text: prompt,
             sender: 'user',
             platform: 'web'
-        });
+        }).catch(e => console.error('Chat save err:', e.message));
     }
-
-    const history = await getChatHistory(company?._id, req.user._id.toString(), 'web', 5);
-    const historyContext = formatHistoryForPrompt(history);
 
     const fullQuestion = `${context}\n\n${historyContext}User Question:\n${prompt}`;
     

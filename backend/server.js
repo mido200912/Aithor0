@@ -1,8 +1,7 @@
 import 'dotenv/config';
 import express from "express";
 import cors from "cors";
-import fs from "fs";
-import path from "path";
+import compression from "compression";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import chatRoutes from "./routes/chatRoutes.js";
@@ -17,6 +16,12 @@ import integrationManagerRoutes from "./routes/integrationManagerRoutes.js";
 import aithorChatRoutes from "./routes/aithorChatRoutes.js";
 
 const app = express();
+
+// ⚡ Disable X-Powered-By to save bytes on every response
+app.disable('x-powered-by');
+
+// ⚡ Gzip compression - reduces response size by 60-80%
+app.use(compression({ level: 6 }));
 
 // ✅ إعداد CORS
 const allowedOrigins = [
