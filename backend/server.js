@@ -186,20 +186,25 @@ app.get('/api/ping', (req, res) => {
 app.get('/api/health', async (req, res) => {
     try {
         const { db, firebaseInitError } = await import('./config/firebase.js');
+        
+        let dbStatus = "not-initialized";
+        if (db) dbStatus = "ready";
+        if (firebaseInitError) dbStatus = "failed: " + (firebaseInitError.message || firebaseInitError.toString());
+
         res.json({
             status: "ok",
-            dbInitialized: !!db,
-            firebaseError: firebaseInitError ? firebaseInitError.message || firebaseInitError.toString() : null,
+            dbStatus: dbStatus,
+            googleClientIdSet: !!process.env.GOOGLE_CLIENT_ID,
             envKeys: {
                 hasProjectId: !!process.env.FIREBASE_PROJECT_ID,
                 hasEmail: !!process.env.FIREBASE_CLIENT_EMAIL,
                 hasPrivateKey: !!process.env.FIREBASE_PRIVATE_KEY,
                 privateKeyLength: process.env.FIREBASE_PRIVATE_KEY ? process.env.FIREBASE_PRIVATE_KEY.length : 0,
-                privateKeyStartsWith: process.env.FIREBASE_PRIVATE_KEY ? process.env.FIREBASE_PRIVATE_KEY.substring(0, 30) : null
             }
         });
     } catch (err) {
-        res.status(500).json({ error: err.message, stack: err.stack });
+        console.error("Health endpoint internal error:", err);
+        res.status(500).json({ error: "Internal Health Check Error", details: err.message });
     }
 });
 

@@ -296,13 +296,13 @@ router.post("/logout", (req, res) => {
   res.json({ message: "Logged out" });
 });
 
-// Google Login/Register - uses google-auth-library to verify Google OAuth id_tokens
+// Google Login/Register (Optimized Error Handling)
 router.post("/google-login", async (req, res) => {
   try {
     const { idToken } = req.body;
     if (!idToken) return res.status(400).json({ error: "Missing ID Token" });
 
-    // ✅ google-auth-library correctly verifies Google OAuth ID tokens
+    // ✅ verify token with google-auth-library
     let email, name, googleId, picture;
     try {
       const { OAuth2Client } = await import('google-auth-library');
@@ -317,34 +317,44 @@ router.post("/google-login", async (req, res) => {
       googleId = payload.sub;
       picture = payload.picture;
     } catch (e) {
+      console.error("Google Token Verification Failed:", e.message);
       return res.status(400).json({ error: "Invalid Google token", details: e.message });
     }
 
-    let user = await User.findOne({ email });
-    let isNew = false;
+    // Try to find or create user - this is where Firestore might fail
+    let user;
+    try {
+      user = await User.findOne({ email });
+      let isNew = false;
 
-    if (user) {
-      if (!user.googleId) {
-        user.googleId = googleId;
-        cacheDelete(`user:${user._id}`);
-        await user.save();
+      if (user) {
+        if (!user.googleId) {
+          user.googleId = googleId;
+          cacheDelete(`user:${user._id}`);
+          await user.save();
+        }
+      } else {
+        isNew = true;
+        user = await User.create({ name, email, googleId, isVerified: true });
       }
-    } else {
-      isNew = true;
-      user = await User.create({ name, email, googleId, isVerified: true });
+
+      const { accessToken, refreshToken } = generateTokens(user._id);
+      sendRefreshCookie(res, refreshToken);
+
+      return res.json({
+        user: { id: user._id, name: user.name, email: user.email, picture },
+        token: accessToken,
+        isNew
+      });
+
+    } catch (dbErr) {
+      console.error("Database error during Google login:", dbErr.message);
+      return res.status(500).json({ error: "Database error", details: dbErr.message });
     }
 
-    const { accessToken, refreshToken } = generateTokens(user._id);
-    sendRefreshCookie(res, refreshToken);
-
-    res.json({
-      user: { id: user._id, name: user.name, email: user.email, picture },
-      token: accessToken,
-      isNew
-    });
   } catch (err) {
-    console.error("Google login error:", err.message);
-    res.status(400).json({ error: "Invalid Google token", details: err.message });
+    console.error("Unexpected Google login error:", err.message);
+    res.status(500).json({ error: "Internal server error", details: err.message });
   }
 });
 
