@@ -173,6 +173,10 @@ app.get('/widget.js', (req, res) => {
     res.send(widgetCode);
 });
 
+app.get('/api/ping', (req, res) => {
+    res.json({ message: "pong" });
+});
+
 // 🩺 Health check endpoint to diagnose Vercel Environment Variables
 app.get('/api/health', async (req, res) => {
     try {
