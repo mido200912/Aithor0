@@ -27,16 +27,34 @@ const allowedOrigins = [
 
 app.use(cors({
     origin: function (origin, callback) {
-        if (!origin || allowedOrigins.indexOf(origin) !== -1 || origin === "*") {
+        // السماح بالطلبات التي ليس لها Origin (مثل تطبيقات الموبايل أو الـ Server-to-Server)
+        if (!origin) return callback(null, true);
+        
+        if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith(".vercel.app") || origin.includes("localhost")) {
             callback(null, true);
         } else {
+            console.log("CORS Blocked for origin:", origin);
             callback(new Error('Not allowed by CORS'));
         }
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "ngrok-skip-browser-warning"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "ngrok-skip-browser-warning"],
     credentials: true,
+    preflightContinue: false,
+    optionsSuccessStatus: 204
 }));
+
+// صراحة التعامل مع طلبات OPTIONS (Preflight) لجميع المسارات
+app.use((req, res, next) => {
+    if (req.method === 'OPTIONS') {
+        res.header('Access-Control-Allow-Origin', req.headers.origin || "*");
+        res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS,PATCH');
+        res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With, Accept, Origin, ngrok-skip-browser-warning');
+        res.header('Access-Control-Allow-Credentials', 'true');
+        return res.status(204).end();
+    }
+    next();
+});
 
 // 🛑 إعداد Raw Body للـ Webhooks
 app.use('/api/webhooks/shopify', express.raw({ type: '*/*' }));

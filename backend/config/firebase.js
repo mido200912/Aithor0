@@ -21,11 +21,15 @@ if (!serviceAccount.project_id || !serviceAccount.private_key || !serviceAccount
 }
 
 // Initialize Firebase
+let db;
 if (!admin.apps.length) {
-    admin.initializeApp({
+    const app = admin.initializeApp({
         credential: admin.credential.cert(serviceAccount)
     });
+    db = app.firestore();
+} else {
+    db = admin.firestore();
 }
 
-export const db = admin.firestore();
+export { db };
 export default admin;
