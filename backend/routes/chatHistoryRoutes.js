@@ -12,44 +12,39 @@ const router = express.Router();
 // @access  Private (Owner only)
 router.get('/conversations', requireAuth, async (req, res) => {
     try {
-        // Find company owned by the user
         const company = await Company.findOne({ owner: req.user._id });
         if (!company) {
             return res.status(404).json({ error: 'Company not found' });
         }
 
-        // Aggregate to find unique users and their last message
-        const conversations = await CompanyChat.aggregate([
-            { $match: { company: company._id } },
-            { $sort: { createdAt: -1 } },
-            {
-                $group: {
-                    _id: "$user",
-                    lastMessage: { $first: "$text" },
-                    updatedAt: { $first: "$createdAt" },
-                    unreadCount: {
-                        $sum: {
-                            $cond: [{ $and: [{ $eq: ["$sender", "user"] }, { $eq: ["$read", false] }] }, 1, 0]
-                        }
-                    },
-                    platform: { $first: "$platform" }
+        // Fetch all messages for this company
+        const allMessages = await CompanyChat.find({ company: company._id });
+
+        // Group by user using plain JS (no aggregate needed)
+        const userMap = {};
+        for (const msg of allMessages) {
+            const uid = msg.user;
+            if (!userMap[uid]) {
+                userMap[uid] = { lastMessage: msg.text, updatedAt: msg.createdAt, platform: msg.platform };
+            } else {
+                const existing = new Date(userMap[uid].updatedAt).getTime();
+                const current = new Date(msg.createdAt).getTime();
+                if (current > existing) {
+                    userMap[uid] = { lastMessage: msg.text, updatedAt: msg.createdAt, platform: msg.platform };
                 }
-            },
-            { $sort: { updatedAt: -1 } }
-        ]);
+            }
+        }
 
-        // Map to friendlier format
-        // Note: 'read' field isn't in schema yet, unreadCount will be 0 or needs schema update. 
-        // For now, let's assume all are read or just ignore unread count logic until we add 'read' field.
-
-        const formattedConversations = conversations.map(c => ({
-            id: c._id, // User identifier (phone or name)
-            name: c._id,
-            lastMessage: c.lastMessage,
-            time: c.updatedAt,
-            unread: 0, // Placeholder
-            platform: c.platform || 'web'
-        }));
+        const formattedConversations = Object.entries(userMap)
+            .map(([uid, data]) => ({
+                id: uid,
+                name: uid,
+                lastMessage: data.lastMessage,
+                time: data.updatedAt,
+                unread: 0,
+                platform: data.platform || 'web'
+            }))
+            .sort((a, b) => new Date(b.time) - new Date(a.time));
 
         res.json(formattedConversations);
     } catch (error) {
@@ -69,10 +64,9 @@ router.get('/history/:userId', requireAuth, async (req, res) => {
             return res.status(404).json({ error: 'Company not found' });
         }
 
-        const messages = await CompanyChat.find({
-            company: company._id,
-            user: userId
-        }).sort({ createdAt: 1 });
+        const messages = await CompanyChat.find({ company: company._id, user: userId });
+        // Sort by createdAt ascending (oldest first)
+        messages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
         res.json(messages);
     } catch (error) {
@@ -121,11 +115,10 @@ router.post('/train', requireAuth, async (req, res) => {
 
         if (!company) return res.status(404).json({ error: 'Company not found' });
 
-        // Fetch recent messages
-        const messages = await CompanyChat.find({
-            company: company._id,
-            user: userId
-        }).sort({ createdAt: -1 }).limit(20);
+        // Fetch messages using plain JS sort and slice
+        let messages = await CompanyChat.find({ company: company._id, user: userId });
+        messages.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        messages = messages.slice(0, 20);
 
         if (messages.length === 0) {
             return res.status(400).json({ error: 'No messages found to train on' });

@@ -340,7 +340,7 @@ router.post("/google-login", async (req, res) => {
     });
   } catch (err) {
     console.error("Google login error:", err.response?.data || err.message);
-    res.status(400).json({ error: "Invalid Google token" });
+    res.status(400).json({ error: "Invalid Google token", details: err.response?.data || err.message });
   }
 });
 

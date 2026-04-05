@@ -1,13 +1,16 @@
-import mongoose from "mongoose";
+import { FirestoreModel } from "../config/firestoreModel.js";
 
-const projectSchema = new mongoose.Schema({
-  owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-  name: { type: String, required: true },
-  description: String,
-  products: [{ title: String, price: Number, sku: String }],
-  faqs: [{ q: String, a: String }],
-  tone: { type: String, default: "professional" }, // voice/tone
-  createdAt: { type: Date, default: Date.now },
-});
+class ProjectModel extends FirestoreModel {
+  async create(data) {
+    const defaultData = {
+      tone: "professional",
+      products: [],
+      faqs: [],
+      ...data
+    };
+    return super.create(defaultData);
+  }
+}
 
-export default mongoose.model("Project", projectSchema);
+const Project = new ProjectModel("projects");
+export default Project;

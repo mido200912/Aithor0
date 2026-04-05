@@ -61,7 +61,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
 
         // TODO: Unregister webhooks from the platform if needed
 
-        await Integration.findByIdAndDelete(req.params.id);
+        await Integration.findByIdAndDelete(integration._id);
 
         res.json({ message: 'Integration deleted successfully' });
     } catch (error) {
@@ -118,17 +118,19 @@ router.post('/whatsapp', requireAuth, async (req, res) => {
             return res.status(404).json({ error: 'Company not found' });
         }
 
-        const integration = await Integration.findOneAndUpdate(
-            { company: company._id, platform: 'whatsapp' },
-            {
-                credentials: {
-                    phoneNumberId,
-                    accessToken
-                },
+        let integration = await Integration.findOne({ company: company._id, platform: 'whatsapp' });
+        if (!integration) {
+            integration = await Integration.create({
+                company: company._id,
+                platform: 'whatsapp',
+                credentials: { phoneNumberId, accessToken },
                 isActive: true
-            },
-            { new: true, upsert: true }
-        );
+            });
+        } else {
+            integration.credentials = { phoneNumberId, accessToken };
+            integration.isActive = true;
+            await integration.save();
+        }
 
         res.json({ message: 'WhatsApp integrated successfully', integration });
     } catch (error) {
@@ -211,24 +213,22 @@ router.post('/telegram', requireAuth, async (req, res) => {
             return res.status(400).json({ error: `Command /${invalidCmd.command} requires at least 3 products.` });
         }
 
-        // Fix nested array saving by switching to findOne + save()
         let integration = await Integration.findOne({ company: company._id, platform: 'telegram' });
         
         if (!integration) {
-            integration = new Integration({ 
-                company: company._id, 
-                platform: 'telegram' 
+            integration = await Integration.create({
+                company: company._id,
+                platform: 'telegram',
+                credentials: { botToken },
+                settings: { commands: sanitizedSettingsCommands },
+                isActive: true
             });
+        } else {
+            integration.credentials = { botToken };
+            integration.settings = { commands: sanitizedSettingsCommands };
+            integration.isActive = true;
+            await integration.save();
         }
-        
-        integration.credentials = { botToken };
-        integration.settings = { commands: sanitizedSettingsCommands };
-        
-        // Force Mongoose to recognize the nested structure change
-        integration.markModified('settings');
-        integration.isActive = true;
-
-        await integration.save();
 
         res.json({ message: 'Telegram configured and Webhook linked successfully!', integration });
     } catch (error) {

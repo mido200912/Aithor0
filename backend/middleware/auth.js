@@ -7,8 +7,9 @@ export const requireAuth = async (req, res, next) => {
     if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "No token" });
     const token = auth.split(" ")[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id).select("-password");
+    const user = await User.findById(decoded.id);
     if (!user) return res.status(401).json({ error: "Invalid token" });
+    delete user.password;
     req.user = user;
     next();
   } catch (err) {

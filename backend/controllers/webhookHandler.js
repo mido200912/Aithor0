@@ -70,11 +70,12 @@ export const handleWhatsAppMessage = async (body) => {
                             'credentials.phoneNumberId': phoneNumberId,
                             platform: 'whatsapp',
                             isActive: true
-                        }).populate('company');
+                        });
 
                         if (!integration || !integration.company) continue;
 
-                        const company = integration.company;
+                        const company = await Company.findById(integration.company);
+                        if (!company) continue;
                         const accessToken = integration.credentials.accessToken;
 
                         const context = await getCompanyAIContext(company);
@@ -134,7 +135,7 @@ export const handleTelegramWebhook = async (req, res) => {
                     company: companyId,
                     platform: 'telegram',
                     isActive: true
-                }).lean();
+                });
 
                 if (!integration) return res.sendStatus(200);
 
@@ -191,7 +192,7 @@ export const handleTelegramWebhook = async (req, res) => {
             company: companyId,
             platform: 'telegram',
             isActive: true
-        }).lean();
+        });
 
         if (!integration) return res.sendStatus(200);
 

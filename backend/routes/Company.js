@@ -16,19 +16,17 @@ router.post("/", requireAuth, async (req, res) => {
     const existing = await Company.findOne({ owner: req.user._id });
 
     if (existing) {
-      // ✅ إذا كانت الشركة موجودة بدون apiKey، أنشئ واحدًا جديدًا
+      // تحديث البيانات الموجودة
       if (!existing.apiKey) {
         existing.apiKey = crypto.randomBytes(24).toString("hex");
       }
-
-      const updated = await Company.findOneAndUpdate(
-        { owner: req.user._id },
-        { ...req.body, apiKey: existing.apiKey },
-        { new: true }
-      );
-      return res.json(updated);
+      // دمج البيانات الجديدة مع القديمة
+      Object.assign(existing, req.body, { apiKey: existing.apiKey });
+      await existing.save();
+      return res.json(existing);
     }
 
+    // إنشاء شركة جديدة
     const apiKey = crypto.randomBytes(24).toString("hex");
     const company = await Company.create({
       ...req.body,
@@ -101,19 +99,19 @@ router.post("/whatsapp-setup", requireAuth, async (req, res) => {
     // حفظ أو تحديث Integration
     const Integration = (await import('../models/Integration.js')).default;
 
-    const integration = await Integration.findOneAndUpdate(
-      { company: company._id, platform: 'whatsapp' },
-      {
+    let integration = await Integration.findOne({ company: company._id, platform: 'whatsapp' });
+    if (!integration) {
+      integration = await Integration.create({
         company: company._id,
         platform: 'whatsapp',
-        credentials: {
-          phoneNumberId,
-          accessToken
-        },
+        credentials: { phoneNumberId, accessToken },
         isActive: true
-      },
-      { new: true, upsert: true }
-    );
+      });
+    } else {
+      integration.credentials = { phoneNumberId, accessToken };
+      integration.isActive = true;
+      await integration.save();
+    }
 
     res.json({
       success: true,

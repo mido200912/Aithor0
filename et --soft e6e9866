@@ -1,0 +1,10 @@
+[33m9a48d46[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m migrating to firebase without secrets
+[33m6292412[m chore: add gitignore file for backend dependencies and environment configuration
+[33m811acfd[m feat: initialize Firebase Admin SDK with environment variable configuration
+[33m9977eac[m feat: initialize backend server with Firebase integration, modular routing, and chat widget support
+[33me6e9866[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m feat: implement webhook handling, chat routing, and prompt utility modules for company-specific interactions
+[33m0ddc44b[m feat: implement chat history retrieval and formatting utilities with new webhook and route handlers
+[33mfc60f91[m feat: add chat and aithorChat route handlers to backend
+[33mf029b8f[m feat: add corexHelper utility with CoreSys API integration and OpenRouter fallback mechanism
+[33m29bb25e[m feat: add vercel.json for API rewrites and cross-origin security headers
+[33mf293487[m feat: implement user authentication flow and company onboarding profile setup

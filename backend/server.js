@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import mongoose from "mongoose";
 import fs from "fs";
 import path from "path";
 import helmet from "helmet";
@@ -66,18 +65,7 @@ const limiter = rateLimit({
 });
 app.use('/api', limiter);
 
-// ✅ اتصال قاعدة البيانات
-const connectDB = async () => {
-    try {
-        await mongoose.connect(process.env.MONGO_URI);
-        console.log("✅ MongoDB connected successfully!");
-    } catch (err) {
-        console.error("❌ MongoDB connection failed:", err.message);
-        process.exit(1);
-    }
-};
-
-connectDB();
+// ✅ تم إزالة اتصال MongoDB لأنه تم التحويل إلى Firebase
 
 // ✅ Routes 
 app.use("/api/chat", chatRoutes);

@@ -104,19 +104,19 @@ const metaCallback = async (req, res) => {
 
     if (!page) return res.status(400).send('No Facebook Pages found for this account.');
 
-    // 4. Save Integration with Page Access Token (رمز دائم للاستمرارية)
-    await Integration.findOneAndUpdate(
-      { company: companyId, platform: 'facebook' },
-      {
-        credentials: {
-          accessToken: page.access_token, // 🔑 رمز وصول الصفحة
-          pageId: page.id,
-          userAccessToken: userAccessToken
-        },
+    // 4. Save Integration
+    let fbIntegration = await Integration.findOne({ company: companyId, platform: 'facebook' });
+    if (!fbIntegration) {
+      await Integration.create({
+        company: companyId, platform: 'facebook',
+        credentials: { accessToken: page.access_token, pageId: page.id, userAccessToken },
         isActive: true
-      },
-      { new: true, upsert: true }
-    );
+      });
+    } else {
+      fbIntegration.credentials = { accessToken: page.access_token, pageId: page.id, userAccessToken };
+      fbIntegration.isActive = true;
+      await fbIntegration.save();
+    }
 
     // 💡 يجب هنا تسجيل الـ Webhooks للصفحة (بواسطة رمز الصفحة)
 
@@ -203,17 +203,18 @@ const shopifyCallback = async (req, res) => {
     const { access_token } = data; // 🔑 رمز وصول دائم
 
     // Save Integration
-    await Integration.findOneAndUpdate(
-      { company: companyId, platform: 'shopify' },
-      {
-        credentials: {
-          shopUrl: shop,
-          accessToken: access_token
-        },
+    let shopifyIntegration = await Integration.findOne({ company: companyId, platform: 'shopify' });
+    if (!shopifyIntegration) {
+      await Integration.create({
+        company: companyId, platform: 'shopify',
+        credentials: { shopUrl: shop, accessToken: access_token },
         isActive: true
-      },
-      { new: true, upsert: true }
-    );
+      });
+    } else {
+      shopifyIntegration.credentials = { shopUrl: shop, accessToken: access_token };
+      shopifyIntegration.isActive = true;
+      await shopifyIntegration.save();
+    }
 
     // 💡 يجب هنا تسجيل Webhooks اللازمة (orders/create, products/update, إلخ)
 
@@ -304,18 +305,18 @@ const tiktokCallback = async (req, res) => {
     const { access_token, refresh_token, open_id } = data;
 
     // Save Integration
-    await Integration.findOneAndUpdate(
-      { company: companyId, platform: 'tiktok' },
-      {
-        credentials: {
-          accessToken: access_token,
-          refreshToken: refresh_token,
-          openId: open_id
-        },
+    let tiktokIntegration = await Integration.findOne({ company: companyId, platform: 'tiktok' });
+    if (!tiktokIntegration) {
+      await Integration.create({
+        company: companyId, platform: 'tiktok',
+        credentials: { accessToken: access_token, refreshToken: refresh_token, openId: open_id },
         isActive: true
-      },
-      { new: true, upsert: true }
-    );
+      });
+    } else {
+      tiktokIntegration.credentials = { accessToken: access_token, refreshToken: refresh_token, openId: open_id };
+      tiktokIntegration.isActive = true;
+      await tiktokIntegration.save();
+    }
 
     res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?status=success&platform=tiktok`);
 

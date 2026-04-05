@@ -1,49 +1,19 @@
-import mongoose from "mongoose";
+import { FirestoreModel } from "../config/firestoreModel.js";
 import crypto from "crypto";
 
-const companySchema = new mongoose.Schema(
-  {
-    owner: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    name: { type: String, required: true },
-    description: { type: String },
-    industry: { type: String },
-    size: { type: String },
-    vision: { type: String },
-    mission: { type: String },
-    values: { type: [String] },
-    apiKey: {
-      type: String,
-      unique: true,
-      default: () => crypto.randomBytes(24).toString("hex"),
-    },
-    requests: [
-      {
-        customerName: String,
-        product: String,
-        message: String,
-        date: { type: Date, default: Date.now },
-      },
-    ],
-    knowledgeBase: [
-      {
-        fileName: String,
-        fileUrl: String,
-        fileType: String, // 'pdf', 'docx', 'text'
-        uploadedAt: { type: Date, default: Date.now }
-      }
-    ],
-    extractedKnowledge: {
-      type: String,
-      default: ""
-    }, // ✨ AI-extracted text from all uploaded files
-    customInstructions: { type: String, default: "" },
-  },
-  { timestamps: true }
-);
+class CompanyModel extends FirestoreModel {
+  async create(data) {
+    const defaultData = {
+      apiKey: crypto.randomBytes(24).toString("hex"),
+      requests: [],
+      knowledgeBase: [],
+      extractedKnowledge: "",
+      customInstructions: "",
+      ...data
+    };
+    return super.create(defaultData);
+  }
+}
 
-const Company = mongoose.model("Company", companySchema);
+const Company = new CompanyModel("companies");
 export default Company;

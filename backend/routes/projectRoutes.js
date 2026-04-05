@@ -44,14 +44,12 @@ router.get("/:id", requireAuth, async (req, res) => {
 // تعديل مشروع
 router.put("/:id", requireAuth, async (req, res) => {
   try {
-    const project = await Project.findOneAndUpdate(
-      { _id: req.params.id, owner: req.user._id },
-      req.body,
-      { new: true, runValidators: true }
-    );
+    const project = await Project.findOne({ _id: req.params.id, owner: req.user._id });
     if (!project) {
       return res.status(404).json({ error: "Project not found" });
     }
+    Object.assign(project, req.body);
+    await project.save();
     res.status(200).json(project);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -61,13 +59,11 @@ router.put("/:id", requireAuth, async (req, res) => {
 // حذف مشروع
 router.delete("/:id", requireAuth, async (req, res) => {
   try {
-    const project = await Project.findOneAndDelete({
-      _id: req.params.id,
-      owner: req.user._id,
-    });
+    const project = await Project.findOne({ _id: req.params.id, owner: req.user._id });
     if (!project) {
       return res.status(404).json({ error: "Project not found" });
     }
+    await Project.findByIdAndDelete(project._id);
     res.status(200).json({ message: "Project deleted successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
