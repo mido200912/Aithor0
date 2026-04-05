@@ -305,6 +305,9 @@ router.post("/google-login", async (req, res) => {
     // ✅ verify token with google-auth-library
     let email, name, googleId, picture;
     try {
+      console.log("DEBUG Google Login: ID Token exists? ", !!idToken);
+      console.log("DEBUG Google Login: Client ID exists? ", !!process.env.GOOGLE_CLIENT_ID);
+      
       const { OAuth2Client } = await import('google-auth-library');
       const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
       const ticket = await client.verifyIdToken({
@@ -317,8 +320,13 @@ router.post("/google-login", async (req, res) => {
       googleId = payload.sub;
       picture = payload.picture;
     } catch (e) {
-      console.error("Google Token Verification Failed:", e.message);
-      return res.status(400).json({ error: "Invalid Google token", details: e.message });
+      console.error("Google Token Verification FULL ERROR:", e);
+      return res.status(400).json({ 
+        error: "Invalid Google token", 
+        details: e.message,
+        error_code: e.code,
+        env_check: !!process.env.GOOGLE_CLIENT_ID 
+      });
     }
 
     // Try to find or create user - this is where Firestore might fail
