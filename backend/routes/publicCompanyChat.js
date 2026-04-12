@@ -44,12 +44,12 @@ router.post("/chat", async (req, res) => {
     if ((!finalApiKey && !slug) || !prompt)
       return res.status(400).json({ success: false, error: "Missing parameters" });
 
-    // ✅ احضار الشركة بناءً على الـ chatToken أو API Key أو السبيكة (Slug)
+    // ✅ احضار الشركة بناءً على الـ chatToken أو السبيكة (Slug)
     let company;
     if (slug) {
       company = await Company.findOne({ slug });
     } else {
-      company = await Company.findOne({ $or: [{ chatToken: finalApiKey }, { apiKey: finalApiKey }] });
+      company = await Company.findOne({ chatToken: finalApiKey });
     }
 
     if (!company)
@@ -211,8 +211,8 @@ router.post("/chat", async (req, res) => {
  */
 router.get("/history", async (req, res) => {
   try {
-    const { apiKey, sessionId } = req.query;
-    const company = await Company.findOne({ $or: [{ chatToken: apiKey }, { apiKey }] });
+    const { apiKey, sessionId } = req.query; // Key name 'apiKey' kept for backward compatibility in URL params, but values must be chatToken
+    const company = await Company.findOne({ chatToken: apiKey });
     if (!company) return res.status(404).json({ success: false });
 
     if (!verifyDomain(req, company)) return res.status(403).json({ success: false });
@@ -246,7 +246,7 @@ router.get("/history", async (req, res) => {
 router.get("/commands/:apiKey", async (req, res) => {
   try {
     const { apiKey } = req.params;
-    const company = await Company.findOne({ $or: [{ chatToken: apiKey }, { apiKey }] });
+    const company = await Company.findOne({ chatToken: apiKey });
     if (!company) return res.status(404).json({ success: false });
 
     if (!verifyDomain(req, company)) return res.status(403).json({ success: false });
