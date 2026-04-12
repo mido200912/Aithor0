@@ -192,10 +192,10 @@ router.post("/save", requireAuth, async (req, res) => {
 router.get("/templates", requireAuth, async (req, res) => {
   res.json({
     templates: [
-      { id: 'default', name: 'الافتراضي (Classic Night)', thumbnail: 'https://img.freepik.com/free-vector/gradient-ui-ux-background_23-2149052117.jpg' },
-      { id: 'glassmorphism', name: 'الزجاجي (Glass Bloom)', thumbnail: 'https://img.freepik.com/free-vector/gradient-glassmorphism-background_23-2149440113.jpg' },
-      { id: 'luxury', name: 'الملكي (Royal Gold)', thumbnail: 'https://img.freepik.com/free-vector/gradient-golden-luxury-background_23-2149117415.jpg' },
-      { id: 'cyberpunk', name: 'المستقبلي (Cyber Neon)', thumbnail: 'https://img.freepik.com/free-vector/cyberpunk-concept-illustration_114360-14112.jpg' }
+      { id: 'default', name: 'الافتراضي (Classic Night)', thumbnail: '/image.png' },
+      { id: 'glassmorphism', name: 'الزجاجي (Glass Bloom)', thumbnail: '/image copy.png' },
+      { id: 'luxury', name: 'الملكي (Royal Gold)', thumbnail: '/image copy 2.png' },
+      { id: 'cyberpunk', name: 'المستقبلي (Cyber Neon)', thumbnail: '/image copy 3.png' }
     ]
   });
 });

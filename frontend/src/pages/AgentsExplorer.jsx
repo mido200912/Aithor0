@@ -138,10 +138,10 @@ const AgentsExplorer = () => {
                   <div
                     key={company._id}
                     className="ae-card"
-                    onClick={() => navigate(`/agents/${company.apiKey}`)}
+                    onClick={() => navigate(`/chat/${company.slug}`)}
                     role="button"
                     tabIndex={0}
-                    onKeyDown={e => e.key === 'Enter' && navigate(`/agents/${company.apiKey}`)}
+                    onKeyDown={e => e.key === 'Enter' && navigate(`/chat/${company.slug}`)}
                   >
                     {/* Card Header */}
                     <div className="ae-card-header">
@@ -212,9 +212,12 @@ export const AgentChat = () => {
   const endRef                  = useRef(null);
 
   useEffect(() => {
+    // If we have an apiKey, we should redirect to the customized ChatPage using the slug
     axios.get(`${API}/public/company/${apiKey}`)
       .then(({ data }) => {
-        if (data.success) {
+        if (data.success && data.company?.slug) {
+          navigate(`/chat/${data.company.slug}`, { replace: true });
+        } else if (data.success) {
           setCompany(data.company);
           setMessages([{
             role: 'ai',
@@ -225,7 +228,7 @@ export const AgentChat = () => {
       })
       .catch(() => setError('خطأ في تحميل بيانات الشركة'))
       .finally(() => setLoading(false));
-  }, [apiKey]);
+  }, [apiKey, navigate]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
