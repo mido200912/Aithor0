@@ -44,40 +44,51 @@ async function saveChatMsg(companyId, userId, text, sender, platform = 'telegram
 
 // ─── WA Helper: Send Text ───────────────────────────────────────────────
 async function waSend(accessToken, phoneNumberId, to, text) {
-    await axios.post(
-        `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
-        { messaging_product: "whatsapp", to, text: { body: text } },
-        { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } }
-    );
+    try {
+        await axios.post(
+            `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
+            { messaging_product: "whatsapp", to, text: { body: text } },
+            { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } }
+        );
+        console.log(`✅ WhatsApp message sent to ${to}`);
+    } catch (error) {
+        console.error(`❌ WA Send Error: ${error.response?.data?.error?.message || error.message}`);
+        console.log('Error Details:', JSON.stringify(error.response?.data?.error || {}, null, 2));
+    }
 }
 
 // ─── WA Helper: Send List (Product Menu) ──────────────────────────────────
 async function waSendProductMenu(accessToken, phoneNumberId, to, products, introText) {
-    const rows = products.slice(0, 10).map(p => ({
-        id: `order:${p.name}`,
-        title: p.name.substring(0, 24),
-        description: p.price ? p.price.substring(0, 72) : 'منتج مميز'
-    }));
-    await axios.post(
-        `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
-        {
-            messaging_product: "whatsapp",
-            recipient_type: "individual",
-            to,
-            type: "interactive",
-            interactive: {
-                type: "list",
-                header: { type: "text", text: "🛍️ المنتجات المتاحة" },
-                body: { text: introText },
-                footer: { text: "اضغط لاختيار المنتج" },
-                action: {
-                    button: "عرض القائمة",
-                    sections: [{ title: "قائمة المنتجات", rows }]
+    try {
+        const rows = products.slice(0, 10).map(p => ({
+            id: `order:${p.name}`,
+            title: p.name.substring(0, 24),
+            description: p.price ? p.price.toString().substring(0, 72) : 'منتج مميز'
+        }));
+        await axios.post(
+            `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
+            {
+                messaging_product: "whatsapp",
+                recipient_type: "individual",
+                to,
+                type: "interactive",
+                interactive: {
+                    type: "list",
+                    header: { type: "text", text: "🛍️ المنتجات المتاحة" },
+                    body: { text: introText },
+                    footer: { text: "اضغط لاختيار المنتج" },
+                    action: {
+                        button: "عرض القائمة",
+                        sections: [{ title: "قائمة المنتجات", rows }]
+                    }
                 }
-            }
-        },
-        { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } }
-    );
+            },
+            { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } }
+        );
+        console.log(`✅ WhatsApp Interactive Menu sent to ${to}`);
+    } catch (error) {
+        console.error(`❌ WA Menu Send Error: ${error.response?.data?.error?.message || error.message}`);
+    }
 }
 
 /**
@@ -110,8 +121,11 @@ export const handleWhatsAppMessage = async (body) => {
                             if (message.interactive.type === 'button_reply') messageText = message.interactive.button_reply.id;
                             else if (message.interactive.type === 'list_reply') messageText = message.interactive.list_reply.id;
                         } else {
-                            continue; // Ignore audio/images for now
+                            console.log(`ℹ️ WhatsApp message type ignored: ${message.type}`);
+                            continue;
                         }
+
+                        console.log(`📧 New WhatsApp Msg from ${from}: "${messageText}" (PhoneID: ${phoneNumberId})`);
 
                         const integration = await Integration.findOne({
                             'credentials.phoneNumberId': phoneNumberId,
@@ -119,7 +133,10 @@ export const handleWhatsAppMessage = async (body) => {
                             isActive: true
                         });
 
-                        if (!integration || !integration.company) continue;
+                        if (!integration) {
+                            console.log(`⚠️ No active WhatsApp integration found for PhoneID: ${phoneNumberId}`);
+                            continue;
+                        }
                         const companyId = integration.company;
                         const accessToken = integration.credentials.accessToken;
                         const company = await Company.findById(companyId);
