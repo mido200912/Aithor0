@@ -124,10 +124,18 @@ export function getChatbotTemplate(type = 'default', company) {
         .autocomplete-menu {
             position: absolute; bottom: calc(100% + 15px); left: 30px; width: calc(100% - 60px);
             background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px;
-            box-shadow: 0 -10px 40px rgba(0,0,0,0.6); overflow: hidden; display: none; flex-direction: column; z-index: 100;
+            box-shadow: 0 -15px 50px rgba(0,0,0,0.8); overflow: hidden; display: none; flex-direction: column; z-index: 1000;
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1);
         }
-        .autocomplete-item { padding: 15px 20px; border-bottom: 1px solid var(--border); cursor: pointer; transition: 0.2s; font-weight: 600; }
-        .autocomplete-item:hover { background: var(--text); color: var(--bg); padding-right: 25px; }
+        .autocomplete-header { padding: 12px 20px; font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 800; border-bottom: 1px solid var(--border); letter-spacing: 1px; }
+        .autocomplete-item { padding: 14px 20px; border-bottom: 1px solid var(--border); cursor: pointer; transition: 0.3s; display: flex; align-items: center; gap: 15px; }
+        .autocomplete-item:last-child { border-bottom: none; }
+        .autocomplete-item i { color: var(--text); font-size: 14px; width: 20px; text-align: center; }
+        .autocomplete-item .cmd-name { font-weight: 700; font-size: 15px; }
+        .autocomplete-item .cmd-desc { font-size: 12px; color: var(--text-muted); margin-right: auto; }
+        .autocomplete-item:hover, .autocomplete-item.selected { background: var(--text); color: var(--bg); }
+        .autocomplete-item:hover .cmd-desc, .autocomplete-item.selected .cmd-desc { color: var(--bg); opacity: 0.7; }
+        .autocomplete-item:hover i, .autocomplete-item.selected i { color: var(--bg); }
     </style>
 </head>
 <body>
@@ -214,6 +222,20 @@ export function getChatbotTemplate(type = 'default', company) {
         
         .product-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 12px 20px; border-radius: 16px; cursor: pointer; backdrop-filter: blur(5px); transition: all 0.3s ease; text-align: right; font-weight: 600; }
         .product-btn:hover { background: rgba(255,255,255,0.15); border-color: #fff; transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.2); }
+        
+        .autocomplete-menu {
+            position: absolute; bottom: calc(100% + 20px); left: 35px; width: calc(100% - 70px);
+            background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
+            border: 1px solid var(--border); border-radius: 20px; box-shadow: 0 -15px 50px rgba(0,0,0,0.6);
+            display: none; flex-direction: column; z-index: 1000; overflow: hidden;
+        }
+        .autocomplete-header { padding: 12px 20px; font-size: 11px; text-transform: uppercase; color: rgba(255,255,255,0.5); font-weight: 800; border-bottom: 1px solid var(--border); }
+        .autocomplete-item { padding: 15px 20px; display: flex; align-items: center; gap: 15px; cursor: pointer; transition: 0.3s; border-bottom: 1px solid var(--border); }
+        .autocomplete-item:last-child { border-bottom: none; }
+        .autocomplete-item:hover, .autocomplete-item.selected { background: rgba(255, 255, 255, 0.1); border-right: 4px solid var(--primary); }
+        .autocomplete-item i { color: var(--primary); font-size: 16px; }
+        .autocomplete-item .cmd-name { font-weight: 700; color: #fff; }
+        .autocomplete-item .cmd-desc { font-size: 12px; color: rgba(255,255,255,0.5); margin-right: auto; }
     </style>
 </head>
 <body>
@@ -232,7 +254,7 @@ export function getChatbotTemplate(type = 'default', company) {
         </div>
         <div class="messages-area" id="chat-box"></div>
         <div class="input-area">
-            <div id="autocomplete-menu" style="display:none; position:absolute; bottom:calc(100% + 20px); background:var(--glass-bg); backdrop-filter:blur(25px); border:1px solid var(--border); border-radius:20px; width:calc(100% - 70px); z-index:100; overflow: hidden; box-shadow: 0 -10px 40px rgba(0,0,0,0.5);"></div>
+            <div class="autocomplete-menu" id="autocomplete-menu"></div>
             <div class="input-wrapper">
                 <input type="text" id="user-input" placeholder="اكتب سؤالك هنا..." autocomplete="off">
                 <button id="send-btn" class="send-btn"><i class="fas fa-paper-plane"></i></button>
@@ -294,6 +316,17 @@ export function getChatbotTemplate(type = 'default', company) {
         
         .product-btn { background: transparent; border: 1px solid var(--primary); color: var(--primary); padding: 15px; text-transform: uppercase; letter-spacing: 1px; font-size: 13px; font-weight: 700; transition: 0.4s; }
         .product-btn:hover { background: var(--primary); color: #000; }
+        
+        .autocomplete-menu {
+            position: absolute; bottom: calc(100% + 20px); left: 40px; width: calc(100% - 80px);
+            background: #000; border: 1px solid var(--primary); box-shadow: 0 0 30px rgba(212, 175, 55, 0.2);
+            display: none; flex-direction: column; z-index: 1000;
+        }
+        .autocomplete-header { padding: 10px 20px; font-size: 10px; color: var(--primary); letter-spacing: 2px; border-bottom: 1px solid #1a1a1a; font-weight: 800; }
+        .autocomplete-item { padding: 15px 20px; display: flex; align-items: center; gap: 15px; border-bottom: 1px solid #1a1a1a; cursor: pointer; transition: 0.3s; }
+        .autocomplete-item:hover, .autocomplete-item.selected { background: var(--primary); color: #000; }
+        .autocomplete-item .cmd-name { font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+        .autocomplete-item .cmd-desc { font-size: 11px; opacity: 0.7; margin-right: auto; }
     </style>
 </head>
 <body>
@@ -305,7 +338,7 @@ export function getChatbotTemplate(type = 'default', company) {
         </div>
         <div class="messages-area" id="chat-box"></div>
         <div class="input-area">
-            <div id="autocomplete-menu" style="display:none; position:absolute; bottom:calc(100% + 20px); background:var(--bg); border:1px solid var(--primary); width:calc(100% - 80px); z-index:100; left: 40px;"></div>
+            <div class="autocomplete-menu" id="autocomplete-menu"></div>
             <div class="input-wrapper">
                 <input type="text" id="user-input" placeholder="كيف يمكننا خدمتك؟">
                 <button id="send-btn" class="send-btn">إرسال</button>
@@ -371,6 +404,17 @@ export function getChatbotTemplate(type = 'default', company) {
 
         .product-btn { background: #000; border: 1px solid var(--neon-blue); color: var(--neon-blue); padding: 12px; font-weight: bold; text-transform: uppercase; transition: 0.3s; cursor: pointer; }
         .product-btn:hover { background: var(--neon-blue); color: #000; box-shadow: 0 0 15px var(--neon-blue); }
+        
+        .autocomplete-menu {
+            position: absolute; bottom: calc(100% + 20px); left: 25px; width: calc(100% - 50px);
+            background: #000; border: 2px solid var(--neon-blue); box-shadow: 0 0 20px var(--neon-blue);
+            display: none; flex-direction: column; z-index: 1000;
+        }
+        .autocomplete-header { padding: 10px 20px; background: var(--neon-blue); color: #000; font-weight: 900; font-size: 11px; letter-spacing: 2px; }
+        .autocomplete-item { padding: 15px 20px; display: flex; align-items: center; gap: 15px; border-bottom: 1px solid rgba(0, 243, 255, 0.2); cursor: pointer; font-family: monospace; }
+        .autocomplete-item:hover, .autocomplete-item.selected { background: var(--neon-pink); color: #fff; border-color: #fff; }
+        .autocomplete-item .cmd-name { font-weight: 900; }
+        .autocomplete-item .cmd-desc { font-size: 11px; opacity: 0.8; margin-right: auto; }
     </style>
 </head>
 <body>
@@ -387,7 +431,7 @@ export function getChatbotTemplate(type = 'default', company) {
         </div>
         <div class="messages-area" id="chat-box"></div>
         <div class="input-area">
-            <div id="autocomplete-menu" style="display:none; position:absolute; bottom:calc(100% + 20px); background:#000; border:2px solid var(--neon-yellow); width:calc(100% - 50px); z-index:100;"></div>
+            <div class="autocomplete-menu" id="autocomplete-menu"></div>
             <div class="input-wrapper">
                 <input type="text" id="user-input" placeholder="> ENTER_COMMAND_">
                 <button id="send-btn" class="send-btn">EXEC</button>
@@ -521,35 +565,72 @@ function getTemplateScript(apiUrl, apiKey) {
         }
     }
 
+    let selectedIndex = -1;
+
+    function updateMenu(matches) {
+        if (!autocompMenu) return;
+        if (matches.length > 0) {
+            autocompMenu.innerHTML = '<div class="autocomplete-header">Available Commands</div>';
+            matches.forEach((c, index) => {
+                const div = document.createElement('div');
+                div.className = 'autocomplete-item' + (index === selectedIndex ? ' selected' : '');
+                const icon = c.icon || (c.command === 'help' ? 'question-circle' : 'bolt');
+                div.innerHTML = '<i class="fas fa-' + icon + '"></i>' +
+                                 '<span class="cmd-name">/' + c.command + '</span>' +
+                                 '<span class="cmd-desc">' + (c.description || '') + '</span>';
+                div.onclick = function() {
+                    input.value = '/' + c.command;
+                    send();
+                };
+                autocompMenu.appendChild(div);
+            });
+            autocompMenu.style.display = 'flex';
+        } else {
+            autocompMenu.style.display = 'none';
+        }
+    }
+
     if (btn) btn.addEventListener('click', send);
     if (input) {
-        input.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') send();
-        });
-        input.addEventListener('input', function(e) {
-            const text = input.value;
-            if (autocompMenu && text.startsWith('/') && webCommands.length > 0) {
-                const query = text.replace('/', '').toLowerCase();
-                const matches = webCommands.filter(c => c.command.toLowerCase().includes(query));
-                if (matches.length > 0) {
-                    autocompMenu.innerHTML = '';
-                    matches.forEach(c => {
-                        const div = document.createElement('div');
-                        div.className = 'autocomplete-item';
-                        div.innerHTML = '<span>/' + c.command + '</span>';
-                        div.onclick = function() {
-                            input.value = '/' + c.command;
-                            send();
-                        };
-                        autocompMenu.appendChild(div);
-                    });
-                    autocompMenu.style.display = 'flex';
-                } else {
+        input.addEventListener('keydown', function(e) {
+            if (autocompMenu && autocompMenu.style.display === 'flex') {
+                const items = autocompMenu.querySelectorAll('.autocomplete-item');
+                if (e.key === 'ArrowDown') {
+                    selectedIndex = (selectedIndex + 1) % items.length;
+                    e.preventDefault();
+                    const matches = getMatches();
+                    updateMenu(matches);
+                } else if (e.key === 'ArrowUp') {
+                    selectedIndex = (selectedIndex - 1 + items.length) % items.length;
+                    e.preventDefault();
+                    const matches = getMatches();
+                    updateMenu(matches);
+                } else if (e.key === 'Enter' && selectedIndex >= 0) {
+                    const matches = getMatches();
+                    input.value = '/' + matches[selectedIndex].command;
+                    selectedIndex = -1;
+                    send();
+                    e.preventDefault();
+                } else if (e.key === 'Escape') {
                     autocompMenu.style.display = 'none';
+                    selectedIndex = -1;
                 }
-            } else if (autocompMenu) {
-                autocompMenu.style.display = 'none';
+            } else if (e.key === 'Enter') {
+                send();
             }
+        });
+
+        function getMatches() {
+            const text = input.value;
+            if (!text.startsWith('/')) return [];
+            const query = text.replace('/', '').toLowerCase();
+            return webCommands.filter(c => c.command.toLowerCase().includes(query));
+        }
+
+        input.addEventListener('input', function(e) {
+            selectedIndex = -1;
+            const matches = getMatches();
+            updateMenu(matches);
         });
     }
 
