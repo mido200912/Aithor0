@@ -4,6 +4,7 @@ import cors from "cors";
 import fs from "fs";
 import path from "path";
 import helmet from "helmet";
+import hpp from "hpp";
 import rateLimit from "express-rate-limit";
 import chatRoutes from "./routes/chatRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
@@ -19,44 +20,44 @@ import chatbotEditorRoutes from "./routes/chatbotEditorRoutes.js";
 
 const app = express();
 
+// 🛑 XSS Clean Middleware
+const sanitize = (text) => {
+    if (typeof text !== 'string') return text;
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;');
+};
+
+const xssClean = (req, res, next) => {
+    if (req.body) Object.keys(req.body).forEach(k => req.body[k] = sanitize(req.body[k]));
+    if (req.query) Object.keys(req.query).forEach(k => req.query[k] = sanitize(req.query[k]));
+    next();
+};
+
 // ✅ إعداد CORS
 const allowedOrigins = [
     "http://localhost:5173",
     "https://voxio-v1.vercel.app",
     "https://voxio0.vercel.app",
-    "https://aithor1.vercel.app"
+    "https://aithor1.vercel.app",
+    "https://aithor2.vercel.app"
 ];
 
 app.use(cors({
     origin: function (origin, callback) {
-        // السماح بالطلبات التي ليس لها Origin (مثل تطبيقات الموبايل أو الـ Server-to-Server)
-        if (!origin) return callback(null, true);
-        
-        if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith(".vercel.app") || origin.includes("localhost") || (req.url && req.url.includes("/api/public"))) {
+        if (!origin || allowedOrigins.includes(origin) || origin.endsWith(".vercel.app") || origin.includes("localhost")) {
             callback(null, true);
         } else {
-            console.log("CORS Blocked for origin:", origin);
             callback(new Error('Not allowed by CORS'));
         }
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "ngrok-skip-browser-warning"],
-    credentials: true,
-    preflightContinue: false,
-    optionsSuccessStatus: 204
+    credentials: true
 }));
-
-// صراحة التعامل مع طلبات OPTIONS (Preflight) لجميع المسارات
-app.use((req, res, next) => {
-    if (req.method === 'OPTIONS') {
-        res.header('Access-Control-Allow-Origin', req.headers.origin || "*");
-        res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS,PATCH');
-        res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With, Accept, Origin, ngrok-skip-browser-warning');
-        res.header('Access-Control-Allow-Credentials', 'true');
-        return res.status(204).end();
-    }
-    next();
-});
 
 // 🛑 إعداد Raw Body للـ Webhooks
 app.use('/api/webhooks/shopify', express.raw({ type: '*/*' }));
@@ -64,25 +65,30 @@ app.use('/api/webhooks/meta', express.raw({ type: '*/*' }));
 app.use('/api/integrations/meta/data-deletion', express.raw({ type: '*/*' }));
 
 // ✅ إعداد JSON Body
-app.use(express.json());
+app.use(express.json({ limit: '10kb' }));
+app.use(hpp());
+app.use(xssClean);
 
 // ✅ إعداد حماية أكبر للموقع (Security Middlewares)
-// 1. Set security HTTP headers
 app.use(helmet({
-    crossOriginOpenerPolicy: { policy: "unsafe-none" }, // Necessary for Google OAuth popup
+    crossOriginOpenerPolicy: { policy: "unsafe-none" },
     crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
-// security plugins are trimmed down since xss-clean and mongoSanitize are fundamentally incompatible with Express 5 req.query.
-
-// 5. Limit requests from same API (apply limit after body parse is fine or before, but trust proxy is needed if deployed)
-app.set('trust proxy', 1); // crucial for rate-limit and IP tracking behind proxies
+app.set('trust proxy', 1);
 const limiter = rateLimit({
-    max: 100, // 100 requests per windowMs
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    message: "Too many requests from this IP, please try again in 15 minutes!"
+    max: 100,
+    windowMs: 15 * 60 * 1000,
+    message: "Too many requests, please try again in 15 minutes."
 });
 app.use('/api', limiter);
+
+const authLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: 20,
+    message: "Too many login attempts, please try again in an hour."
+});
+app.use("/api/auth/login", authLimiter);
 
 // ✅ تم إزالة اتصال MongoDB لأنه تم التحويل إلى Firebase
 
