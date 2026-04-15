@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useLanguage } from '../../context/LanguageContext';
+import { secureStorage } from '../../utils/secureStorage';
 import { motion } from 'framer-motion';
 import './AiTraining.css';
 
@@ -14,7 +15,7 @@ const AiTraining = () => {
     const [savingKnowledge, setSavingKnowledge] = useState(false); // ✨ جديد
 
     const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://aithor1.vercel.app/api';
-    const token = localStorage.getItem('token');
+    const token = secureStorage.getItem('token');
 
     useEffect(() => {
         fetchFiles();
@@ -197,15 +198,15 @@ const AiTraining = () => {
                             {files.length === 0 ? (
                                 <p className="empty-state">{t.dashboard.trainingPage.noFiles}</p>
                             ) : (
-                                files.map((file) => (
-                                    <div key={file._id} className="file-item">
+                                files.map((file, index) => (
+                                    <div key={file._id || index} className="file-item">
                                         <div className="file-info">
                                             <i className={`fas fa-file-${file.fileType === 'pdf' ? 'pdf' : file.fileType === 'docx' ? 'word' : 'alt'}`}></i>
                                             <span>{file.fileName}</span>
                                         </div>
                                         <button
                                             className="btn-icon-delete"
-                                            onClick={() => handleDeleteFile(file._id)}
+                                            onClick={() => handleDeleteFile(file._id || `temp-${index}`)}
                                             title={t.dashboard.trainingPage.delete}
                                         >
                                             <i className="fas fa-trash"></i>

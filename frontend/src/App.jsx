@@ -10,6 +10,7 @@ import OnboardingProfile from './pages/onboarding/Profile';
 import OnboardingKnowledge from './pages/onboarding/Knowledge';
 import OnboardingConnect from './pages/onboarding/Connect';
 import ProtectedRoute from './components/ProtectedRoute';
+import GuestRoute from './components/GuestRoute';
 import DashboardLayout from './layouts/DashboardLayout';
 import DashboardHome from './pages/dashboard/Home';
 import Inbox from './pages/dashboard/Inbox';
@@ -40,8 +41,8 @@ function App() {
             <div className="app">
               <Routes>
                 <Route path="/" element={<Home />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
+                <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
+                <Route path="/register" element={<GuestRoute><Register /></GuestRoute>} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/onboarding/profile" element={<OnboardingProfile />} />
                 <Route path="/onboarding/knowledge" element={<OnboardingKnowledge />} />

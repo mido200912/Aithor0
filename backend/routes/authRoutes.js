@@ -3,10 +3,12 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import cookieParser from "cookie-parser";
 import User from "../models/User.js";
+import PendingUser from "../models/PendingUser.js";
 import sendEmail from "../utils/sendEmail.js";
 import { generateOtpEmail } from "../utils/emailTemplate.js";
 import { requireAuth } from "../middleware/auth.js";
 import { cacheDelete } from "../utils/cache.js";
+import { db } from "../config/firebase.js";
 
 const router = express.Router();
 router.use(cookieParser());
@@ -47,21 +49,31 @@ router.post("/register", async (req, res) => {
     if (password.length < 8)
       return res.status(400).json({ error: "Password must be at least 8 chars" });
 
+    // 1️⃣ Check if user already exists as verified
     const exists = await User.findOne({ email });
     if (exists) return res.status(400).json({ error: "Email already exists" });
 
-    // ⚡ bcrypt rounds 8 = still secure, 4x faster than rounds 10
+    // 2️⃣ Generate OTP and Hash Password
     const hash = await bcrypt.hash(password, 8);
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    
-    const user = await User.create({ 
+    const otpExpires = Date.now() + 10 * 60 * 1000;
+
+    // 3️⃣ Store in PendingUser instead of User (Prevents login without verification)
+    let pendingUser = await PendingUser.findOne({ email });
+    const userData = { 
       name, 
       email, 
       password: hash,
       otp,
-      otpExpires: Date.now() + 10 * 60 * 1000,
-      isVerified: false
-    });
+      otpExpires
+    };
+
+    if (pendingUser) {
+      Object.assign(pendingUser, userData);
+      await pendingUser.save();
+    } else {
+      await PendingUser.create(userData);
+    }
 
     try {
       const message = `Your confirmation OTP is: ${otp}\nIt is valid for 10 minutes.`;
@@ -71,24 +83,25 @@ router.post("/register", async (req, res) => {
         otp
       );
       await sendEmail({
-        email: user.email,
+        email,
         subject: "VOXIO - Confirm Your Account",
         message,
         html
       });
-      console.log(`✅ OTP sent to ${user.email}`); 
+      console.log(`✅ Registration OTP sent to ${email}`); 
     } catch (err) {
       console.error("❌ Email sending failed.", err.message);
-      console.log(`⚠️ (Fallback) The OTP for ${user.email} is: ${otp}`);
+      console.log(`⚠️ (Fallback) The OTP for ${email} is: ${otp}`);
     }
 
     res.json({
       message: "OTP sent to email",
       step: "otp_required",
-      email: user.email
+      email
     });
 
   } catch (err) {
+    console.error("Registration error:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -101,8 +114,20 @@ router.post("/login", async (req, res) => {
     if (!email || !password)
       return res.status(400).json({ error: "Missing fields" });
 
+    // 1️⃣ Find user in main verified list
     const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ error: "Invalid credentials" });
+    if (!user) {
+      // Check if they are in pending list
+      const pending = await PendingUser.findOne({ email });
+      if (pending) {
+        return res.status(400).json({ error: "Account not verified. Please register again to receive a new OTP." });
+      }
+      return res.status(400).json({ error: "Invalid credentials" });
+    }
+
+    if (user.isVerified === false) {
+       return res.status(400).json({ error: "Account not verified" });
+    }
 
     const ok = await bcrypt.compare(password, user.password);
     if (!ok) return res.status(400).json({ error: "Invalid credentials" });
@@ -125,9 +150,9 @@ router.post("/login", async (req, res) => {
         message,
         html
       });
-      console.log(`✅ OTP sent to ${user.email}`);
+      console.log(`✅ Login OTP sent to ${user.email}`);
     } catch (err) {
-      console.error("❌ Email sending failed. Are SMTP credentials set in .env?", err.message);
+      console.error("❌ Login email sending failed.", err.message);
       console.log(`⚠️ (Fallback) The OTP for ${user.email} is: ${otp}`);
     }
 
@@ -149,30 +174,57 @@ router.post("/verify-otp", async (req, res) => {
     email = email?.trim();
     if (!email || !otp) return res.status(400).json({ error: "Missing email or OTP" });
 
-    const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ error: "Invalid request" });
+    let user = await User.findOne({ email });
+    let isRegistration = false;
+
+    if (!user) {
+      // Look in pending collection
+      user = await PendingUser.findOne({ email });
+      isRegistration = true;
+    }
+
+    if (!user) return res.status(400).json({ error: "Invalid request (User not found)" });
 
     if (!user.otp || user.otp !== otp) {
       return res.status(400).json({ error: "Invalid OTP" });
     }
 
     if (user.otpExpires < Date.now()) {
-      return res.status(400).json({ error: "OTP has expired. Please login again." });
+      return res.status(400).json({ error: "OTP has expired. Please try again." });
     }
 
-    user.otp = undefined;
-    user.otpExpires = undefined;
-    user.isVerified = true;
-    await user.save();
+    let finalUser;
+    if (isRegistration) {
+      // CREATE the real user now!
+      finalUser = await User.create({
+        name: user.name,
+        email: user.email,
+        password: user.password,
+        isVerified: true,
+        createdAt: new Date()
+      });
+      // Delete from pending
+      await db.collection("pending_users").doc(user._id).delete();
+      console.log(`✅ New user verified and created: ${email}`);
+    } else {
+      // Regular login verification
+      user.otp = undefined;
+      user.otpExpires = undefined;
+      user.isVerified = true;
+      await user.save();
+      finalUser = user;
+      console.log(`✅ Existing user verified: ${email}`);
+    }
 
-    const { accessToken, refreshToken } = generateTokens(user._id);
+    const { accessToken, refreshToken } = generateTokens(finalUser._id);
     sendRefreshCookie(res, refreshToken);
 
     res.json({
-      user: { id: user._id, name: user.name, email: user.email },
+      user: { id: finalUser._id, name: finalUser.name, email: finalUser.email },
       token: accessToken,
     });
   } catch (err) {
+    console.error("OTP verification error:", err);
     res.status(500).json({ error: err.message });
   }
 });

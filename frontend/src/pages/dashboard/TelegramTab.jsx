@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useLanguage } from '../../context/LanguageContext';
+import { secureStorage } from '../../utils/secureStorage';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://aithor1.vercel.app/api';
@@ -8,7 +9,7 @@ const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://aithor1.vercel.app/
 const TelegramTab = () => {
     const { language } = useLanguage();
     const isArabic = language === 'ar';
-    const token = localStorage.getItem('token');
+    const token = secureStorage.getItem('token');
 
     const [mainTab, setMainTab] = useState('requests');  // 'requests' | 'chats'
     const [requests, setRequests] = useState([]);
