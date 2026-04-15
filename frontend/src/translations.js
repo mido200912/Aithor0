@@ -8,7 +8,8 @@ export const translations = {
             pricing: 'الأسعار',
             contact: 'تواصل معنا',
             login: 'تسجيل الدخول',
-            startFree: 'ابدأ مجاناً'
+            startFree: 'ابدأ مجاناً',
+            goDashboard: 'لوحة التحكم'
         },
         hero: {
             badge: 'مدعوم بالذكاء الاصطناعي',
@@ -274,7 +275,8 @@ export const translations = {
             pricing: 'Pricing',
             contact: 'Contact Us',
             login: 'Login',
-            startFree: 'Start Free'
+            startFree: 'Start Free',
+            goDashboard: 'Dashboard'
         },
         hero: {
             badge: 'AI Powered',

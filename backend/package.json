@@ -30,10 +30,12 @@
     "helmet": "^8.1.0",
     "hpp": "^0.2.3",
     "jsonwebtoken": "^9.0.2",
+    "mammoth": "^1.12.0",
     "mongoose": "^8.6.0",
     "multer": "^2.0.2",
     "multer-storage-cloudinary": "^4.0.0",
     "nodemailer": "^8.0.4",
+    "pdf-parse": "^2.4.5",
     "xss-clean": "^0.1.4"
   },
   "devDependencies": {

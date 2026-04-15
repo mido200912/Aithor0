@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
+import { secureStorage } from '../utils/secureStorage';
 
 const AuthContext = createContext();
 
@@ -14,8 +15,8 @@ export const AuthProvider = ({ children }) => {
     // Check if user is already logged in on mount
     useEffect(() => {
         const initAuth = async () => {
-            const token = localStorage.getItem('token');
-            const savedUser = localStorage.getItem('user');
+            const token = secureStorage.getItem('token');
+            const savedUser = secureStorage.getItem('user');
 
             if (token && savedUser) {
                 try {
@@ -23,8 +24,7 @@ export const AuthProvider = ({ children }) => {
                     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
                     // Parse saved user
-                    const parsedUser = JSON.parse(savedUser);
-                    setUser(parsedUser);
+                    setUser(savedUser);
 
                     // Optionally validate token with backend
                     // const response = await axios.get(`${BACKEND_URL}/auth/me`);
@@ -32,8 +32,8 @@ export const AuthProvider = ({ children }) => {
                 } catch (err) {
                     console.error('Auth initialization error:', err);
                     // Token invalid, clear storage
-                    localStorage.removeItem('token');
-                    localStorage.removeItem('user');
+                    secureStorage.removeItem('token');
+                    secureStorage.removeItem('user');
                     delete axios.defaults.headers.common['Authorization'];
                 }
             }
@@ -58,8 +58,8 @@ export const AuthProvider = ({ children }) => {
             // Fallback for direct login (if no OTP configured / older flow)
             const { user, token } = response.data;
             setUser(user);
-            localStorage.setItem('token', token);
-            localStorage.setItem('user', JSON.stringify(user));
+            secureStorage.setItem('token', token);
+            secureStorage.setItem('user', user);
             axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
             return { step: 'done' };
         } catch (err) {
@@ -84,8 +84,8 @@ export const AuthProvider = ({ children }) => {
             const { user, token } = response.data;
 
             setUser(user);
-            localStorage.setItem('token', token);
-            localStorage.setItem('user', JSON.stringify(user));
+            secureStorage.setItem('token', token);
+            secureStorage.setItem('user', user);
             axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
             return true;
@@ -110,8 +110,8 @@ export const AuthProvider = ({ children }) => {
 
             const { user, token } = response.data;
             setUser(user);
-            localStorage.setItem('token', token);
-            localStorage.setItem('user', JSON.stringify(user));
+            secureStorage.setItem('token', token);
+            secureStorage.setItem('user', user);
             axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
             return { step: 'done' };
@@ -181,8 +181,8 @@ export const AuthProvider = ({ children }) => {
             const response = await axios.post(`${BACKEND_URL}/auth/google-login`, { idToken });
             const { user, token, isNew } = response.data;
             setUser(user);
-            localStorage.setItem('token', token);
-            localStorage.setItem('user', JSON.stringify(user));
+            secureStorage.setItem('token', token);
+            secureStorage.setItem('user', user);
             axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
             return { success: true, isNew };
         } catch (err) {
@@ -196,8 +196,8 @@ export const AuthProvider = ({ children }) => {
 
     const logout = () => {
         setUser(null);
-        localStorage.removeItem('token');
-        localStorage.removeItem('user'); // ✨ Remove user from localStorage
+        secureStorage.removeItem('token');
+        secureStorage.removeItem('user');
         delete axios.defaults.headers.common['Authorization'];
     };
 
@@ -220,3 +220,4 @@ export const useAuth = () => {
     }
     return context;
 };
+

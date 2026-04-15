@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import './Navbar.css';
 
 const Navbar = () => {
@@ -10,6 +11,8 @@ const Navbar = () => {
     const [activeLink, setActiveLink] = useState('home');
     const { theme, toggleTheme } = useTheme();
     const { language, toggleLanguage, t } = useLanguage();
+    const { user } = useAuth();
+    const navigate = useNavigate();
 
     useEffect(() => {
         const handleScroll = () => {
@@ -28,8 +31,6 @@ const Navbar = () => {
             setIsMobileMenuOpen(false);
         }
     };
-
-    const navigate = useNavigate();
 
     return (
         <nav className={`navbar ${isScrolled ? 'scrolled' : ''}`}>
@@ -149,8 +150,16 @@ const Navbar = () => {
                         </div>
                     </li>
                     <li className="mobile-only mobile-auth">
-                        <button className="btn btn-secondary" onClick={() => navigate('/login')}>{t.nav.login}</button>
-                        <button className="btn btn-primary" onClick={() => navigate('/register')}>{t.nav.startFree}</button>
+                        {user ? (
+                            <button className="btn btn-primary btn-block" onClick={() => navigate('/dashboard')}>
+                                {t.nav.goDashboard}
+                            </button>
+                        ) : (
+                            <>
+                                <button className="btn btn-secondary" onClick={() => navigate('/login')}>{t.nav.login}</button>
+                                <button className="btn btn-primary" onClick={() => navigate('/register')}>{t.nav.startFree}</button>
+                            </>
+                        )}
                     </li>
                 </ul>
 
@@ -172,8 +181,16 @@ const Navbar = () => {
                             <i className="fas fa-sun"></i>
                         )}
                     </button>
-                    <button className="btn btn-secondary" onClick={() => navigate('/login')}>{t.nav.login}</button>
-                    <button className="btn btn-primary" onClick={() => navigate('/register')}>{t.nav.startFree}</button>
+                    {user ? (
+                        <button className="btn btn-primary" onClick={() => navigate('/dashboard')}>
+                            {t.nav.goDashboard}
+                        </button>
+                    ) : (
+                        <>
+                            <button className="btn btn-secondary" onClick={() => navigate('/login')}>{t.nav.login}</button>
+                            <button className="btn btn-primary" onClick={() => navigate('/register')}>{t.nav.startFree}</button>
+                        </>
+                    )}
                 </div>
 
                 <div

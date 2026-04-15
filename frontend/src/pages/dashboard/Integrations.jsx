@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useLanguage } from '../../context/LanguageContext';
+import { secureStorage } from '../../utils/secureStorage';
 import { motion, AnimatePresence } from 'framer-motion';
 import './Integrations.css';
 
@@ -67,12 +68,17 @@ const Integrations = () => {
         setToast({ type, title, message });
         setTimeout(() => setToast(null), 4500);
     };
-    const [showWhatsappModal, setShowWhatsappModal] = useState(false);
-    const [whatsappData, setWhatsappData] = useState({ phoneNumberId: '', accessToken: '' });
+    const [whatsappData, setWhatsappData] = useState({ phoneNumberId: '', accessToken: '', commands: [] });
     
     // Telegram State
-    const [showTelegramModal, setShowTelegramModal] = useState(false);
     const [telegramData, setTelegramData] = useState({ botToken: '', commands: [] });
+
+    // Instagram State
+    const [instagramData, setInstagramData] = useState({ pageToken: '', commentRules: [] });
+    const [isInstagramTokenRevealed, setIsInstagramTokenRevealed] = useState(false);
+    const [isInstagramEditing, setIsInstagramEditing] = useState(false);
+    const [newCommentRule, setNewCommentRule] = useState({ triggerWord: '', replyMessage: '' });
+
     const [newCommand, setNewCommand] = useState({ command: '', description: '', category: '', type: 'ai', message: '', successMessage: '', products: [] });
     const [newProduct, setNewProduct] = useState({ name: '', price: '', description: '' });
 
@@ -83,19 +89,23 @@ const Integrations = () => {
     const [isVerifyingRevealOtp, setIsVerifyingRevealOtp] = useState(false);
     const [isTelegramTokenRevealed, setIsTelegramTokenRevealed] = useState(false);
     const [isTelegramEditing, setIsTelegramEditing] = useState(false);
+    const [isWhatsappTokenRevealed, setIsWhatsappTokenRevealed] = useState(false);
+    const [isWhatsappEditing, setIsWhatsappEditing] = useState(false);
+
+    const [selectedPlatform, setSelectedPlatform] = useState(null); // 'whatsapp', 'telegram', 'instagram'
 
     // useRef always holds the LATEST value - immune to stale closures
     const newCommandRef = useRef(newCommand);
     useEffect(() => { newCommandRef.current = newCommand; }, [newCommand]);
 
-    const [availableIntegrations, setAvailableIntegrations] = useState([
+    const availableIntegrations = [
         {
             id: 'whatsapp',
             name: 'WhatsApp Business',
             icon: 'whatsapp',
             color: '#25d366',
             descKey: 'whatsappDesc',
-            available: false
+            available: true
         },
         {
             id: 'telegram',
@@ -103,6 +113,14 @@ const Integrations = () => {
             icon: 'telegram',
             color: '#26A5E4',
             descKey: 'telegramDesc',
+            available: true
+        },
+        {
+            id: 'instagram',
+            name: 'Instagram',
+            icon: 'instagram',
+            color: '#e4405f',
+            descKey: 'instagramDesc',
             available: true
         },
         {
@@ -114,22 +132,6 @@ const Integrations = () => {
             available: false
         },
         {
-            id: 'instagram',
-            name: 'Instagram',
-            icon: 'instagram',
-            color: '#e4405f',
-            descKey: 'instagramDesc',
-            available: false
-        },
-        {
-            id: 'facebook',
-            name: 'Facebook Messenger',
-            icon: 'facebook-f',
-            color: '#1877f2',
-            descKey: 'messengerDesc',
-            available: false
-        },
-        {
             id: 'tiktok',
             name: 'TikTok',
             icon: 'tiktok',
@@ -137,10 +139,10 @@ const Integrations = () => {
             descKey: 'tiktokDesc',
             available: false
         }
-    ]);
+    ];
 
     const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://aithor1.vercel.app/api';
-    const token = localStorage.getItem('token');
+    const token = secureStorage.getItem('token');
 
     useEffect(() => {
         fetchIntegrations();
@@ -158,7 +160,7 @@ const Integrations = () => {
             window.history.replaceState({}, document.title, window.location.pathname);
             fetchIntegrations();
         }
-    }, []);
+    }, [t.language]);
 
     const fetchIntegrations = async () => {
         try {
@@ -180,47 +182,20 @@ const Integrations = () => {
         return integration.isActive ? 'connected' : 'paused';
     };
 
-    const handleConnect = async (integration) => {
+    const handleConnect = (integration) => {
         if (!integration.available) return;
-
-        try {
-            const userStr = localStorage.getItem('user');
-            const user = userStr ? JSON.parse(userStr) : null;
-
-            if (integration.id === 'facebook' || integration.id === 'instagram') {
-                const companyRes = await axios.get(`${BACKEND_URL}/company`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                const companyId = companyRes.data._id;
-                window.location.href = `${BACKEND_URL}/integrations/meta/login?companyId=${companyId}`;
-            }
-            else if (integration.id === 'whatsapp') {
-                setShowWhatsappModal(true);
-            }
-            else if (integration.id === 'tiktok') {
-                const companyRes = await axios.get(`${BACKEND_URL}/company`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                const companyId = companyRes.data._id;
-                window.location.href = `${BACKEND_URL}/integrations/tiktok/login?companyId=${companyId}`;
-            }
-            else if (integration.id === 'shopify') {
-                const shopUrl = prompt(t.dashboard.integrationsPage.shopifyPrompt);
-                if (!shopUrl) return;
-                const companyRes = await axios.get(`${BACKEND_URL}/company`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                const companyId = companyRes.data._id;
-                window.location.href = `${BACKEND_URL}/integrations/shopify/login?shop=${shopUrl}&companyId=${companyId}`;
-            }
-            else if (integration.id === 'telegram') {
-                setIsTelegramEditing(false);
-                setIsTelegramTokenRevealed(false);
-                setShowTelegramModal(true);
-            }
-        } catch (error) {
-            console.error('Error connecting integration:', error);
-            showToast('error', t.language === 'ar' ? 'خطأ في الربط' : 'Connection Error', t.dashboard.integrationsPage.errorConnect || 'Error connecting. Try again later.');
+        setSelectedPlatform(integration.id);
+        
+        if (integration.id === 'telegram') {
+            setTelegramData({ botToken: '', commands: [] });
+            setIsTelegramTokenRevealed(false);
+            setIsTelegramEditing(false);
+        } else if (integration.id === 'whatsapp') {
+            setWhatsappData({ phoneNumberId: '', accessToken: '', commands: [] });
+            setIsWhatsappTokenRevealed(false);
+            setIsWhatsappEditing(false);
+        } else if (integration.id === 'instagram') {
+            setInstagramData({ commentRules: [] });
         }
     };
 
@@ -291,7 +266,7 @@ const Integrations = () => {
         setNewProduct({ name: '', price: '', description: '' });
     };
 
-    const addTelegramCommand = () => {
+    const addCommand = () => {
         // Read from REF (always latest) not from state
         const currentCmd = newCommandRef.current;
         if (!currentCmd.command) return;
@@ -300,22 +275,25 @@ const Integrations = () => {
             showToast('warning', t.language === 'ar' ? 'منتجات غير كافية' : 'Not Enough Products', t.language === 'ar' ? 'يجب إضافة 3 منتجات على الأقل!' : 'At least 3 products required!');
             return;
         }
-        console.log("✅ Adding command from ref:", JSON.stringify(currentCmd));
-        setTelegramData(prev => ({
-            ...prev,
-            commands: [...prev.commands, { ...currentCmd }]
-        }));
+        
+        if (activeBuilder === 'telegram') {
+            setTelegramData(prev => ({ ...prev, commands: [...prev.commands, { ...currentCmd }] }));
+        } else if (activeBuilder === 'whatsapp') {
+            setWhatsappData(prev => ({ ...prev, commands: [...prev.commands, { ...currentCmd }] }));
+        }
+
         const emptyCmd = { command: '', description: '', category: '', type: 'ai', message: '', successMessage: '', products: [] };
         setNewCommand(emptyCmd);
         newCommandRef.current = emptyCmd;
         setNewProduct({ name: '', price: '', description: '' });
     };
 
-    const removeTelegramCommand = (index) => {
-        setTelegramData(prev => ({
-            ...prev,
-            commands: prev.commands.filter((_, i) => i !== index)
-        }));
+    const removeCommand = (index, platform) => {
+        if (platform === 'telegram') {
+            setTelegramData(prev => ({ ...prev, commands: prev.commands.filter((_, i) => i !== index) }));
+        } else if (platform === 'whatsapp') {
+            setWhatsappData(prev => ({ ...prev, commands: prev.commands.filter((_, i) => i !== index) }));
+        }
     };
 
     const removeProductFromCommand = (idx) => {
@@ -329,17 +307,70 @@ const Integrations = () => {
     const handleWhatsappSubmit = async (e) => {
         e.preventDefault();
         try {
-            await axios.post(`${BACKEND_URL}/integration-manager/whatsapp`, whatsappData, {
+            const currentCmd = newCommandRef.current;
+            let finalCommands = [...whatsappData.commands];
+            if (currentCmd.command && currentCmd.command.trim() !== '') {
+                if (currentCmd.type === 'product_menu' && (currentCmd.products || []).length < 3) {
+                    showToast('warning', t.language === 'ar' ? 'منتجات غير كافية' : 'Not Enough Products', t.language === 'ar' ? 'يجب إضافة 3 منتجات على الأقل لقائمة المنتجات!' : 'Product menu requires at least 3 products!');
+                    return;
+                }
+                finalCommands.push({ ...currentCmd });
+            }
+
+            const payload = {
+                phoneNumberId: whatsappData.phoneNumberId,
+                accessToken: whatsappData.accessToken,
+                commands: finalCommands
+            };
+
+            await axios.post(`${BACKEND_URL}/integration-manager/whatsapp`, payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            showToast('success', t.language === 'ar' ? 'تم الربط!' : 'Connected!', t.dashboard.integrationsPage.whatsappConfigSuccess || 'WhatsApp configured successfully');
-            setShowWhatsappModal(false);
-            setWhatsappData({ phoneNumberId: '', accessToken: '' });
+            showToast('success', t.language === 'ar' ? 'تم ربط واتساب!' : 'WhatsApp Connected!', t.dashboard.integrationsPage.whatsappConfigSuccess || 'WhatsApp configured successfully');
+            backToList();
+            
+            const emptyCmd = { command: '', description: '', category: '', type: 'ai', message: '', successMessage: '', products: [] };
+            setNewCommand(emptyCmd);
+            newCommandRef.current = emptyCmd;
+
             fetchIntegrations();
         } catch (error) {
             console.error('Error configuring WhatsApp:', error);
             showToast('error', t.language === 'ar' ? 'خطأ' : 'Error', t.dashboard.integrationsPage.errorConnect);
         }
+    };
+    const handleInstagramSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            await axios.post(`${BACKEND_URL}/integration-manager/instagram/rules`, { 
+                pageToken: instagramData.pageToken,
+                commentRules: instagramData.commentRules 
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            showToast('success', t.language === 'ar' ? 'تم الحفظ!' : 'Saved!', t.language === 'ar' ? 'تم حفظ قواعد الرد التلقائي' : 'Auto-reply rules saved');
+            backToList();
+            fetchIntegrations();
+        } catch (error) {
+            console.error('Error configuring IG:', error);
+            showToast('error', t.language === 'ar' ? 'خطأ' : 'Error', t.dashboard.integrationsPage.errorConnect);
+        }
+    };
+
+    const addIgRule = () => {
+        if (!newCommentRule.triggerWord || !newCommentRule.replyMessage) return;
+        setInstagramData(prev => ({
+            ...prev,
+            commentRules: [...prev.commentRules, newCommentRule]
+        }));
+        setNewCommentRule({ triggerWord: '', replyMessage: '' });
+    };
+
+    const removeIgRule = (idx) => {
+        setInstagramData(prev => ({
+            ...prev,
+            commentRules: prev.commentRules.filter((_, i) => i !== idx)
+        }));
     };
 
     const handleToggle = async (platformId) => {
@@ -365,22 +396,43 @@ const Integrations = () => {
         const integration = integrations.find(int => int.platform === platformId);
         if (!integration) return;
 
+        setSelectedPlatform(platformId);
+
         if (platformId === 'telegram') {
             setIsTelegramEditing(true);
             setIsTelegramTokenRevealed(false);
-            setRevealOtpVisible(false);
             setTelegramData({
-                botToken: '', // Hide by default
+                botToken: '', // Hide initially
                 commands: integration.settings?.commands || []
             });
-            setShowTelegramModal(true);
         } else if (platformId === 'whatsapp') {
+            setIsWhatsappEditing(true);
+            setIsWhatsappTokenRevealed(false);
             setWhatsappData({
-                phoneNumberId: integration.credentials?.phoneNumberId || '',
-                accessToken: integration.credentials?.accessToken || ''
+                phoneNumberId: '', // Hide
+                accessToken: '',    // Hide
+                commands: integration.settings?.commands || []
             });
-            setShowWhatsappModal(true);
+        } else if (platformId === 'instagram') {
+            setIsInstagramEditing(true);
+            setIsInstagramTokenRevealed(false);
+            setInstagramData({
+                pageToken: '', // Hide initially
+                commentRules: integration.settings?.commentRules || []
+            });
         }
+    };
+
+    const backToList = () => {
+        setSelectedPlatform(null);
+        setIsWhatsappEditing(false);
+        setIsWhatsappTokenRevealed(false);
+        setIsTelegramEditing(false);
+        setIsTelegramTokenRevealed(false);
+        setIsInstagramEditing(false);
+        setIsInstagramTokenRevealed(false);
+        setRevealOtpVisible(false);
+        setRevealOtpCode('');
     };
 
     const requestRevealOtp = async () => {
@@ -403,17 +455,31 @@ const Integrations = () => {
         if (!revealOtpCode) return;
         setIsVerifyingRevealOtp(true);
         try {
+            const platform = selectedPlatform === 'whatsapp' ? 'whatsapp' : 'telegram';
             const res = await axios.post(`${BACKEND_URL}/integration-manager/verify-reveal-otp`, {
                 otp: revealOtpCode,
-                platform: 'telegram'
+                platform
             }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             
-            setTelegramData(prev => ({ ...prev, botToken: res.data.botToken }));
-            setIsTelegramTokenRevealed(true);
+            if (platform === 'telegram') {
+                setTelegramData(prev => ({ ...prev, botToken: res.data.botToken }));
+                setIsTelegramTokenRevealed(true);
+            } else if (platform === 'instagram') {
+                setInstagramData(prev => ({ ...prev, pageToken: res.data.pageToken }));
+                setIsInstagramTokenRevealed(true);
+            } else {
+                setWhatsappData(prev => ({ 
+                    ...prev, 
+                    accessToken: res.data.accessToken,
+                    phoneNumberId: res.data.phoneNumberId 
+                }));
+                setIsWhatsappTokenRevealed(true);
+            }
+            
             setRevealOtpVisible(false);
-            showToast('success', t.language === 'ar' ? 'تم التحقق!' : 'Verified!', t.language === 'ar' ? 'تم كشف التوكن.' : 'Token revealed successfully.');
+            showToast('success', t.language === 'ar' ? 'تم التحقق!' : 'Verified!', t.language === 'ar' ? 'تم كشف البيانات.' : 'Data revealed successfully.');
         } catch (error) {
             console.error('Error verifying reveal OTP:', error);
             showToast('error', t.language === 'ar' ? 'كود غير صحيح' : 'Invalid OTP');
@@ -437,14 +503,6 @@ const Integrations = () => {
             console.error('Error disconnecting integration:', error);
             showToast('error', t.language === 'ar' ? 'خطأ' : 'Error', t.dashboard.integrationsPage.errorDisconnect);
         }
-    };
-
-    const closeTelegramModal = () => {
-        setShowTelegramModal(false);
-        setIsTelegramEditing(false);
-        setIsTelegramTokenRevealed(false);
-        setRevealOtpVisible(false);
-        setRevealOtpCode('');
     };
 
     const containerVariants = {
@@ -497,7 +555,7 @@ const Integrations = () => {
                             className="btn btn-primary"
                             onClick={() => {
                                 const btn = document.getElementById('copy-widget-btn');
-                                const apiKey = JSON.parse(localStorage.getItem('user'))?.apiKey || 'YOUR_API_KEY';
+                                const apiKey = secureStorage.getItem('user')?.apiKey || 'YOUR_API_KEY';
                                 const code = `<script \n  src="https://voxio1.vercel.app/widget.js" \n  data-api-key="${apiKey}" \n  data-base-url="https://voxio1.vercel.app"\n></script>`;
                                 navigator.clipboard.writeText(code);
                                 const originalText = btn.innerText;
@@ -517,7 +575,7 @@ const Integrations = () => {
                         <code>
 {`<script 
   src="https://voxio1.vercel.app/widget.js" 
-  data-api-key="${JSON.parse(localStorage.getItem('user'))?.apiKey || 'YOUR_API_KEY'}" 
+  data-api-key="${secureStorage.getItem('user')?.apiKey || 'YOUR_API_KEY'}" 
   data-base-url="https://voxio-v1.vercel.app"
 ></script>`}
                         </code>
@@ -531,6 +589,7 @@ const Integrations = () => {
                 <p style={{ textAlign: 'center', padding: '40px' }}>{t.dashboard.integrationsPage.loading}</p>
             ) : (
                 <div style={{ position: 'relative' }}>
+                    {!selectedPlatform ? (
                     <motion.div
                         className="integrations-list"
                         variants={containerVariants}
@@ -592,62 +651,153 @@ const Integrations = () => {
                         );
                     })}
                     </motion.div>
-                </div>
-            )}
+                    ) : (
+                        <div className="integration-detail-view animate-fade-in">
+                            <button className="btn btn-outline" onClick={backToList} style={{ marginBottom: '20px' }}>
+                                <i className="fas fa-arrow-left" style={{ marginInlineEnd: '8px' }}></i>
+                                {t.language === 'ar' ? 'عودة للربط' : 'Back to Integrations'}
+                            </button>
 
-            {/* WhatsApp Modal */}
-            {showWhatsappModal && (
-                <div className="modal-overlay" onClick={() => setShowWhatsappModal(false)}>
-                    <div className="modal-content" onClick={e => e.stopPropagation()}>
-                        <h2>{t.dashboard.integrationsPage.whatsappModalTitle || 'WhatsApp Integration'}</h2>
-                        <form onSubmit={handleWhatsappSubmit} className="whatsapp-form">
-                            <div className="form-group">
-                                <label>{t.dashboard.integrationsPage.whatsappPhoneNumberId || 'Phone Number ID'}</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={whatsappData.phoneNumberId}
-                                    onChange={(e) => setWhatsappData({ ...whatsappData, phoneNumberId: e.target.value })}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>{t.dashboard.integrationsPage.whatsappAccessToken || 'Access Token'}</label>
-                                <textarea
-                                    required
-                                    rows="3"
-                                    value={whatsappData.accessToken}
-                                    onChange={(e) => setWhatsappData({ ...whatsappData, accessToken: e.target.value })}
-                                ></textarea>
-                            </div>
-                            <p className="help-text" style={{ fontSize: '0.9rem', color: '#666', marginBottom: '20px' }}>
-                                {t.dashboard.integrationsPage.whatsappHelp || 'Get these details from the Meta Developer Dashboard.'}
-                            </p>
-                            <div className="modal-actions">
-                                <button type="button" className="btn btn-outline" onClick={() => setShowWhatsappModal(false)}>
-                                    {t.dashboard.integrationsPage.whatsappCancel || 'Cancel'}
-                                </button>
-                                <button type="submit" className="btn btn-primary">
-                                    {t.dashboard.integrationsPage.whatsappSave || 'Save & Connect'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+                            {/* WhatsApp View */}
+                            {selectedPlatform === 'whatsapp' && (
+                                <div className="detail-card" style={{ background: '#fff', borderRadius: '15px', padding: '30px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+                                    <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <i className="fab fa-whatsapp" style={{ color: '#25d366' }} />
+                                        {t.language === 'ar' ? 'إعداد واتساب بيزنس' : 'WhatsApp Business Setup'}
+                                    </h2>
+                                    
+                                    {isWhatsappEditing && !isWhatsappTokenRevealed ? (
+                                        <div style={{ marginTop: '20px', padding: '20px', background: '#f8fbfc', borderRadius: '15px', border: '1px solid #e8e8e8' }}>
+                                            <h3 style={{ fontSize: '1rem', marginBottom: '15px', color: '#333' }}>
+                                                {t.language === 'ar' ? 'البيانات محمية' : 'Protected Data'}
+                                            </h3>
+                                            <p style={{ fontSize: '0.85rem', color: '#666', marginBottom: '20px' }}>
+                                                {t.language === 'ar' ? 'لعرض أو تعديل بيانات الاعتماد (Tokens)، يرجى طلب رمز التحقق وإدخاله.' : 'To view or edit credentials (Tokens), please request a verification code.'}
+                                            </p>
+                                            {!revealOtpVisible ? (
+                                                <button 
+                                                    type="button" 
+                                                    className="btn btn-outline"
+                                                    onClick={requestRevealOtp}
+                                                    disabled={isRequestingOtp}
+                                                    style={{ width: '100%', height: '45px', borderStyle: 'dashed', color: '#25d366', borderColor: '#25d366' }}
+                                                >
+                                                    {isRequestingOtp ? <i className="fas fa-spinner fa-spin" /> : <i className="fas fa-eye" style={{ marginInlineEnd: '8px' }} />}
+                                                    {t.language === 'ar' ? 'كشف البيانات (يتطلب OTP)' : 'Reveal Data (Requires OTP)'}
+                                                </button>
+                                            ) : (
+                                                <div style={{ display: 'flex', gap: '8px' }}>
+                                                    <input
+                                                        type="text"
+                                                        placeholder={t.language === 'ar' ? 'أدخل الكود' : 'Enter Code'}
+                                                        value={revealOtpCode}
+                                                        onChange={(e) => setRevealOtpCode(e.target.value)}
+                                                        style={{ flex: 1, borderRadius: '10px', padding: '10px 14px', border: '1px solid #25d366' }}
+                                                    />
+                                                    <button 
+                                                        type="button" 
+                                                        className="btn btn-primary"
+                                                        onClick={verifyRevealOtp}
+                                                        disabled={isVerifyingRevealOtp}
+                                                        style={{ background: '#25d366', borderColor: '#25d366', padding: '0 20px' }}
+                                                    >
+                                                        {isVerifyingRevealOtp ? <i className="fas fa-spinner fa-spin" /> : (t.language === 'ar' ? 'تأكيد' : 'Verify')}
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <form onSubmit={handleWhatsappSubmit} style={{ marginTop: '20px' }}>
+                                            <div className="form-group">
+                                                <label>{t.dashboard.integrationsPage.whatsappPhoneNumberId || 'Phone Number ID'}</label>
+                                                <input
+                                                    type="text"
+                                                    required
+                                                    value={whatsappData.phoneNumberId}
+                                                    onChange={(e) => setWhatsappData({ ...whatsappData, phoneNumberId: e.target.value })}
+                                                    style={{ border: '1px solid #ddd', borderRadius: '10px', padding: '12px' }}
+                                                />
+                                            </div>
+                                            <div className="form-group">
+                                                <label>{t.dashboard.integrationsPage.whatsappAccessToken || 'Access Token'}</label>
+                                                <textarea
+                                                    required
+                                                    rows="3"
+                                                    value={whatsappData.accessToken}
+                                                    onChange={(e) => setWhatsappData({ ...whatsappData, accessToken: e.target.value })}
+                                                    style={{ border: '1px solid #ddd', borderRadius: '10px', padding: '12px', resize: 'vertical' }}
+                                                ></textarea>
+                                            </div>
+                                            <p className="help-text" style={{ fontSize: '0.9rem', color: '#666', marginBottom: '20px' }}>
+                                                {t.dashboard.integrationsPage.whatsappHelp || 'Get these details from the Meta Developer Dashboard.'}
+                                            </p>
+                                            
+                                            <div style={{ marginTop: '25px', borderTop: '2px solid #f0f0f0', paddingTop: '20px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                                                    <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#25d36615', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#25d366' }}>
+                                                        <i className="fas fa-terminal" style={{ fontSize: '0.9rem' }} />
+                                                    </div>
+                                                    <h3 style={{ fontSize: '1.05rem', fontWeight: '700', color: '#333' }}>
+                                                        {t.language === 'ar' ? 'إعداد الأوامر التفاعلية' : 'Smart Command Setup'}
+                                                    </h3>
+                                                </div>
+                                                
+                                                <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: '20px', lineHeight: '1.5' }}>
+                                                    {t.language === 'ar' ? 'قم ببناء تجربة تفاعلية لعملائك عبر واتساب.' : 'Build an interactive experience for your customers via WhatsApp.'}
+                                                </p>
 
-            {/* Telegram Modal */}
-            {showTelegramModal && (
-                <div className="modal-overlay" onClick={closeTelegramModal}>
-                    <div className="modal-content telegram-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '650px' }}>
-                        <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <i className="fab fa-telegram" style={{ color: '#26A5E4' }} />
-                            {t.language === 'ar' ? 'إعداد تليجرام' : 'Telegram Setup'}
-                        </h2>
-                        <form onSubmit={handleTelegramSubmit} style={{ 
-                            maxHeight: '75vh', 
-                            overflowY: 'auto', 
-                            paddingRight: '8px'
-                        }}>
+                                                {/* Saved commands list */}
+                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+                                                    {whatsappData.commands.map((cmd, idx) => (
+                                                        <div key={idx} style={{ position: 'relative', background: '#fff', padding: '12px', borderRadius: '12px', border: '1px solid #e8e8e8' }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                                                                <span style={{ fontWeight: 800, color: '#25d366', fontSize: '0.9rem' }}>/{cmd.command}</span>
+                                                                <span style={{ fontSize: '0.65rem', background: '#f0f0f0', padding: '1px 6px', borderRadius: '8px', color: '#888' }}>{cmd.type}</span>
+                                                            </div>
+                                                            <button type="button" onClick={() => removeCommand(idx, 'whatsapp')} style={{ position: 'absolute', top: '10px', right: '10px', color: '#ff4d4f', background: 'none', border: 'none', cursor: 'pointer' }}>
+                                                                <i className="fas fa-trash" />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+
+                                                {/* New command builder */}
+                                                <div style={{ background: '#fbfcfe', border: '1px solid #e6ebf5', borderRadius: '15px', padding: '15px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
+                                                        <input type="text" placeholder="command" value={newCommand.command} onChange={e => updateNewCommand('command', e.target.value)}
+                                                            style={{ borderRadius: '8px', padding: '8px 12px', border: '1px solid #ddd' }} />
+                                                        <select value={newCommand.type} onChange={e => updateNewCommand('type', e.target.value)}
+                                                            style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #ddd' }}>
+                                                            <option value="ai">🤖 AI Reply</option>
+                                                            <option value="fixed_message">💬 Fixed Message</option>
+                                                            <option value="product_menu">🛍️ Product Menu</option>
+                                                        </select>
+                                                    </div>
+                                                    <button type="button" onClick={addCommand}
+                                                        style={{ width: '100%', padding: '10px', background: '#25d366', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '700' }}>
+                                                        {t.language === 'ar' ? 'إضافة الأمر' : 'Add Command'}
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div className="card-actions" style={{ marginTop: '25px', padding: '15px 0 0 0', borderTop: '1px solid #f0f0f0' }}>
+                                                <button type="submit" className="btn btn-primary" style={{ background: '#25d366', borderColor: '#25d366', width: '100%' }}>
+                                                    {isWhatsappEditing ? (t.language === 'ar' ? 'تحديث الإعدادات' : 'Update Settings') : (t.language === 'ar' ? 'تفعيل وتوصيل' : 'Activate & Connect')}
+                                                </button>
+                                            </div>
+                                        </form>
+                                    )}
+                                </div>
+                            )}
+
+                        {/* Telegram View */}
+                        {selectedPlatform === 'telegram' && (
+                            <div className="detail-card" style={{ background: '#fff', borderRadius: '15px', padding: '30px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+                                <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <i className="fab fa-telegram" style={{ color: '#26A5E4' }} />
+                                    {t.language === 'ar' ? 'إعداد تليجرام' : 'Telegram Setup'}
+                                </h2>
+                                <form onSubmit={handleTelegramSubmit} style={{ marginTop: '20px' }}>
                             <div className="form-group">
                                 <label>{t.language === 'ar' ? 'Bot Token (من @BotFather)' : 'Bot Token (from @BotFather)'}</label>
                                 
@@ -722,7 +872,7 @@ const Integrations = () => {
                                             <div style={{ fontSize: '0.8rem', color: '#555', marginBottom: '4px' }}><b>📝 {t.language === 'ar' ? 'التصنيف:' : 'Category:'}</b> {cmd.category}</div>
                                             {cmd.products?.length > 0 && <div style={{ fontSize: '0.8rem', color: '#26A5E4' }}><b>📦 {cmd.products.length} {t.language === 'ar' ? 'منتجات' : 'Products'}</b></div>}
                                             
-                                            <button type="button" onClick={() => removeTelegramCommand(idx)} style={{ position: 'absolute', top: '12px', right: '12px', color: '#ff4d4f', background: '#fff', border: '1px solid #ff4d4f30', cursor: 'pointer', width: '24px', height: '24px', borderRadius: '50%', fontSize: '0.7rem' }}>
+                                            <button type="button" onClick={() => removeCommand(idx, 'telegram')} style={{ position: 'absolute', top: '12px', right: '12px', color: '#ff4d4f', background: '#fff', border: '1px solid #ff4d4f30', cursor: 'pointer', width: '24px', height: '24px', borderRadius: '50%', fontSize: '0.7rem' }}>
                                                 <i className="fas fa-trash" />
                                             </button>
                                         </div>
@@ -775,11 +925,11 @@ const Integrations = () => {
                                         </div>
                                     )}
 
-                                    {/* Product Menu Management */}
+                                {/* Product Menu Management */}
                                     {newCommand.type === 'product_menu' && (
                                         <div style={{ background: '#fff', borderRadius: '15px', padding: '18px', border: '1px solid #e0e0e0' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px', color: '#333', fontSize: '0.9rem', fontWeight: '700' }}>
-                                                <i className="fas fa-boxes" /> {t.language === 'ar' ? 'قائمة المنتجات' : 'Products List'}
+                                                <i className="fas fa-boxes" /> {t.language === 'ar' ? 'قائمة المنتجات (3 على الأقل)' : 'Products List (Min 3)'}
                                             </div>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '15px' }}>
                                                 {(newCommand.products || []).map((p, i) => (
@@ -806,24 +956,150 @@ const Integrations = () => {
                                         </div>
                                     )}
 
-                                    <button type="button" onClick={addTelegramCommand}
-                                        style={{ width: '100%', padding: '12px', background: '#26A5E4', color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: '700', fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(38, 165, 228, 0.2)' }}>
-                                        <i className="fas fa-check-circle" />
-                                        {t.language === 'ar' ? 'حفظ هذا الأمر والبدء في آخر' : 'Add Command to Platform'}
+                                        <button type="button" onClick={addCommand}
+                                            style={{ width: '100%', padding: '12px', background: '#26A5E4', color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: '700', fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(38, 165, 228, 0.2)' }}>
+                                            <i className="fas fa-check-circle" />
+                                            {t.language === 'ar' ? 'إضافة الأمر' : 'Add Command'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="card-actions" style={{ marginTop: '30px', padding: '15px 0 0 0', borderTop: '1px solid #f0f0f0' }}>
+                                    <button type="submit" className="btn btn-primary" style={{ background: '#26A5E4', borderColor: '#26A5E4', width: '100%' }}>
+                                        {isTelegramEditing ? (t.language === 'ar' ? 'تحديث الإعدادات' : 'Update Settings') : (t.dashboard.integrationsPage.whatsappSave || 'Save & Connect')}
                                     </button>
                                 </div>
+                            </form>
+                        </div>
+                        )}
+
+                        {/* Instagram View */}
+                        {selectedPlatform === 'instagram' && (
+                            <div className="detail-card" style={{ background: '#fff', borderRadius: '15px', padding: '30px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+                                <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <i className="fab fa-instagram" style={{ color: '#e4405f' }} />
+                                    {t.language === 'ar' ? 'قواعد إنستجرام للردود التلقائية' : 'Instagram Auto-Reply Rules'}
+                                </h2>
+                                
+                                <p style={{ fontSize: '0.85rem', color: '#666', marginBottom: '20px', lineHeight: '1.5' }}>
+                                    {t.language === 'ar' ? 'استخدم هذه الأداة للرد التلقائي (بالرسائل الخاصة DM) على المستخدمين الذين يقومون بالتعليق على منشوراتك بكلمات محددة.' : 'Set up auto direct messages when users comment specific words on your posts or reels.'}
+                                </p>
+
+                                <form onSubmit={handleInstagramSubmit} style={{ marginTop: '20px' }}>
+                                    
+                                    <div className="form-group" style={{ marginBottom: '25px' }}>
+                                        <label>{t.language === 'ar' ? 'Page Access Token (من فيسبوك)' : 'Page Access Token (from Facebook)'}</label>
+                                        
+                                        {isInstagramEditing && !isInstagramTokenRevealed ? (
+                                            <div style={{ marginTop: '10px', padding: '15px', background: '#f8fbfc', borderRadius: '12px', border: '1px solid #e8e8e8' }}>
+                                                {!revealOtpVisible ? (
+                                                    <button 
+                                                        type="button" 
+                                                        className="btn btn-outline"
+                                                        onClick={requestRevealOtp}
+                                                        disabled={isRequestingOtp}
+                                                        style={{ width: '100%', height: '40px', borderStyle: 'dashed', fontSize: '0.85rem' }}
+                                                    >
+                                                        {isRequestingOtp ? <i className="fas fa-spinner fa-spin" /> : <i className="fas fa-eye" style={{ marginInlineEnd: '8px' }} />}
+                                                        {t.language === 'ar' ? 'كشف الـ Token (يتطلب OTP)' : 'Reveal Token (Requires OTP)'}
+                                                    </button>
+                                                ) : (
+                                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                                        <input
+                                                            type="text"
+                                                            placeholder={t.language === 'ar' ? 'رمز الـ OTP' : 'OTP Code'}
+                                                            value={revealOtpCode}
+                                                            onChange={(e) => setRevealOtpCode(e.target.value)}
+                                                            style={{ flex: 1, borderRadius: '10px', padding: '8px 12px', border: '1px solid #e4405f', fontSize: '0.85rem' }}
+                                                        />
+                                                        <button 
+                                                            type="button" 
+                                                            className="btn btn-primary"
+                                                            onClick={verifyRevealOtp}
+                                                            disabled={isVerifyingRevealOtp}
+                                                            style={{ background: '#e4405f', borderColor: '#e4405f', padding: '0 15px', fontSize: '0.85rem' }}
+                                                        >
+                                                            {isVerifyingRevealOtp ? <i className="fas fa-spinner fa-spin" /> : (t.language === 'ar' ? 'تأكيد' : 'Verify')}
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <textarea
+                                                required
+                                                rows="2"
+                                                placeholder="EAAG...."
+                                                value={instagramData.pageToken}
+                                                onChange={(e) => setInstagramData(prev => ({ ...prev, pageToken: e.target.value }))}
+                                                style={{ width: '100%', borderRadius: '12px', padding: '12px 15px', border: '1px solid #ddd', fontSize: '0.85rem' }}
+                                            />
+                                        )}
+                                        <small style={{ color: '#888', display: 'block', marginTop: '5px' }}>
+                                            {t.language === 'ar' ? 'ستجده في Facebook Developer Dashboard لبدء استلام تعليقاتك.' : 'Find this in your Facebook Developer Dashboard to enable DM replies.'}
+                                        </small>
+                                    </div>
+
+                                    <div style={{ borderTop: '2px solid #f0f0f0', paddingTop: '15px' }}>
+                                        <h3 style={{ fontSize: '1rem', fontWeight: '700', color: '#333', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <i className="fas fa-bolt" style={{ color: '#e4405f' }} />
+                                            {t.language === 'ar' ? 'قواعد الأوامر التفاعلية' : 'Interactive Rule Setup'}
+                                        </h3>
+                                    </div>
+                            {/* Saved rules list */}
+                            {instagramData.commentRules.length > 0 && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '25px' }}>
+                                    <h4 style={{ margin: 0, fontSize: '0.9rem', color: '#333' }}>{t.language === 'ar' ? 'القواعد المحفوظة:' : 'Saved Rules:'}</h4>
+                                    {instagramData.commentRules.map((rule, idx) => (
+                                        <div key={idx} style={{ position: 'relative', background: '#f8fbfc', padding: '15px', borderRadius: '12px', border: '1px solid #e8e8e8' }}>
+                                            <div style={{ color: '#e4405f', fontWeight: 'bold', marginBottom: '5px', fontSize: '0.9rem' }}>
+                                                {t.language === 'ar' ? 'الكلمة المفتاحية:' : 'Trigger Word:'} {rule.triggerWord}
+                                            </div>
+                                            <div style={{ fontSize: '0.8rem', color: '#555', whiteSpace: 'pre-line' }}>
+                                                {rule.replyMessage}
+                                            </div>
+                                            
+                                            <button type="button" onClick={() => removeIgRule(idx)} style={{ position: 'absolute', top: '15px', right: '15px', color: '#ff4d4f', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.9rem' }}>
+                                                <i className="fas fa-trash" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* New rule builder */}
+                            <div style={{ background: '#fff', border: '2px dashed #e4405f40', borderRadius: '15px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                    <label style={{ fontSize: '0.8rem', color: '#666', fontWeight: '600' }}>{t.language === 'ar' ? 'الكلمة المفتاحية (مثال: التفاصيل)' : 'Trigger Word (e.g. details)'}</label>
+                                    <input type="text" placeholder={t.language === 'ar' ? 'أدخل الكلمة' : 'Enter word'} value={newCommentRule.triggerWord}
+                                        onChange={e => setNewCommentRule(prev => ({ ...prev, triggerWord: e.target.value }))}
+                                        style={{ borderRadius: '10px', padding: '10px 14px', border: '1px solid #ddd' }} />
+                                </div>
+                                
+                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                    <label style={{ fontSize: '0.8rem', color: '#666', fontWeight: '600' }}>{t.language === 'ar' ? 'رسالة الرد الخاص (DM)' : 'DM Reply Message'}</label>
+                                    <textarea rows="3" value={newCommentRule.replyMessage}
+                                        placeholder={t.language === 'ar' ? 'مرحباً، تم إرسال التفاصيل لك...' : 'Hello, here are the details...'}
+                                        onChange={e => setNewCommentRule(prev => ({ ...prev, replyMessage: e.target.value }))}
+                                        style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid #ddd', fontSize: '0.85rem' }} />
+                                </div>
+                                
+                                <button type="button" onClick={addIgRule}
+                                    style={{ padding: '10px', background: '#e4405f15', color: '#e4405f', border: '1px solid #e4405f40', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '0.9rem' }}>
+                                    <i className="fas fa-plus" style={{ marginInlineEnd: '5px' }} />
+                                    {t.language === 'ar' ? 'إضافة القاعدة' : 'Add Rule'}
+                                </button>
                             </div>
 
-                            <div className="modal-actions" style={{ marginTop: '30px' }}>
-                                <button type="button" className="btn btn-outline" onClick={closeTelegramModal}>
-                                    {t.dashboard.integrationsPage.whatsappCancel || 'Cancel'}
-                                </button>
-                                <button type="submit" className="btn btn-primary" style={{ background: '#26A5E4', borderColor: '#26A5E4' }}>
-                                    {t.dashboard.integrationsPage.whatsappSave || 'Save & Connect'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
+                                <div className="card-actions" style={{ marginTop: '30px', padding: '15px 0 0 0', borderTop: '1px solid #f0f0f0' }}>
+                                    <button type="submit" className="btn btn-primary" style={{ background: '#e4405f', borderColor: '#e4405f', width: '100%' }}>
+                                        {t.language === 'ar' ? 'حفظ وتفعيل' : 'Save & Enable'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                        )}
+                        </div>
+                    )}
                 </div>
             )}
         </div>

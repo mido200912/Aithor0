@@ -42,8 +42,57 @@ async function saveChatMsg(companyId, userId, text, sender, platform = 'telegram
     await CompanyChat.create({ company: companyId, user: userId, text, sender, platform });
 }
 
+// ─── WA Helper: Send Text ───────────────────────────────────────────────
+async function waSend(accessToken, phoneNumberId, to, text) {
+    try {
+        await axios.post(
+            `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
+            { messaging_product: "whatsapp", to, text: { body: text } },
+            { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } }
+        );
+        console.log(`✅ WhatsApp message sent to ${to}`);
+    } catch (error) {
+        console.error(`❌ WA Send Error: ${error.response?.data?.error?.message || error.message}`);
+        console.log('Error Details:', JSON.stringify(error.response?.data?.error || {}, null, 2));
+    }
+}
+
+// ─── WA Helper: Send List (Product Menu) ──────────────────────────────────
+async function waSendProductMenu(accessToken, phoneNumberId, to, products, introText) {
+    try {
+        const rows = products.slice(0, 10).map(p => ({
+            id: `order:${p.name}`,
+            title: p.name.substring(0, 24),
+            description: p.price ? p.price.toString().substring(0, 72) : 'منتج مميز'
+        }));
+        await axios.post(
+            `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
+            {
+                messaging_product: "whatsapp",
+                recipient_type: "individual",
+                to,
+                type: "interactive",
+                interactive: {
+                    type: "list",
+                    header: { type: "text", text: "🛍️ المنتجات المتاحة" },
+                    body: { text: introText },
+                    footer: { text: "اضغط لاختيار المنتج" },
+                    action: {
+                        button: "عرض القائمة",
+                        sections: [{ title: "قائمة المنتجات", rows }]
+                    }
+                }
+            },
+            { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } }
+        );
+        console.log(`✅ WhatsApp Interactive Menu sent to ${to}`);
+    } catch (error) {
+        console.error(`❌ WA Menu Send Error: ${error.response?.data?.error?.message || error.message}`);
+    }
+}
+
 /**
- * WhatsApp Webhook Handler
+ * WhatsApp Webhook Handler (Matches Telegram Logic)
  */
 export const handleWhatsAppMessage = async (body) => {
     try {
@@ -59,12 +108,24 @@ export const handleWhatsAppMessage = async (body) => {
                         const message = value.messages[0];
                         const messageId = message.id;
                         const from = message.from;
-                        const messageText = message.text?.body;
                         const phoneNumberId = value.metadata.phone_number_id;
 
                         if (processedMessages.has(messageId)) continue;
                         processedMessages.add(messageId);
                         if (processedMessages.size > 1000) processedMessages.delete(processedMessages.values().next().value);
+
+                        let messageText = '';
+                        if (message.type === 'text') {
+                            messageText = message.text?.body || '';
+                        } else if (message.type === 'interactive') {
+                            if (message.interactive.type === 'button_reply') messageText = message.interactive.button_reply.id;
+                            else if (message.interactive.type === 'list_reply') messageText = message.interactive.list_reply.id;
+                        } else {
+                            console.log(`ℹ️ WhatsApp message type ignored: ${message.type}`);
+                            continue;
+                        }
+
+                        console.log(`📧 New WhatsApp Msg from ${from}: "${messageText}" (PhoneID: ${phoneNumberId})`);
 
                         const integration = await Integration.findOne({
                             'credentials.phoneNumberId': phoneNumberId,
@@ -72,39 +133,163 @@ export const handleWhatsAppMessage = async (body) => {
                             isActive: true
                         });
 
-                        if (!integration || !integration.company) continue;
-
-                        const company = await Company.findById(integration.company);
-                        if (!company) continue;
+                        if (!integration) {
+                            console.log(`⚠️ No active WhatsApp integration found for PhoneID: ${phoneNumberId}`);
+                            continue;
+                        }
+                        const companyId = integration.company;
                         const accessToken = integration.credentials.accessToken;
-
-                        const context = await getCompanyAIContext(company);
-
-                        const history = await getChatHistory(company._id, from, 'whatsapp', 5);
-                        const historyContext = formatHistoryForPrompt(history);
-
-                        const reply = await fetchAiResponse(`${context}\n\n${historyContext}User Question:\n${messageText}`);
+                        const company = await Company.findById(companyId);
+                        if (!company) continue;
 
                         const CompanyChat = (await import('../models/CompanyChat.js')).default;
-                        await CompanyChat.create({ company: company._id, user: from, text: messageText, sender: 'user', platform: 'whatsapp' });
 
-                        try {
-                            await axios.post(
-                                `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
-                                { messaging_product: "whatsapp", to: from, text: { body: reply } },
-                                { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } }
-                            );
-                            await CompanyChat.create({ company: company._id, user: from, text: reply, sender: 'ai', platform: 'whatsapp' });
-                        } catch (sendError) {
-                            console.error(`❌ Failed to send WA reply:`, sendError.response?.data || sendError.message);
+                        // 1. ORDER SESSION CHECK
+                        if (orderSessions[`wa_${from}`]) {
+                            const session = orderSessions[`wa_${from}`];
+                            const phoneRegex = /^[0-9]{11}$/;
+                            const isValidPhone = phoneRegex.test(messageText.trim());
+
+                            if (!isValidPhone) {
+                                await waSend(accessToken, phoneNumberId, from, `❌ رقم غير صحيح. برجاء كتابة 11 رقم لطلبك: ${session.productName}`);
+                                return;
+                            }
+
+                            const phoneNumber = messageText.trim();
+                            company.requests.push({
+                                customerName: `WhatsApp (${phoneNumber})`,
+                                product: session.productName,
+                                message: `📦 طلب جديد من واتساب!\nالمنتج: ${session.productName}\nالموبايل: ${phoneNumber}`,
+                                date: new Date()
+                            });
+                            await company.save();
+                            await CompanyChat.create({ company: companyId, user: from, text: `رقم الموبايل: ${phoneNumber}`, sender: 'user', platform: 'whatsapp' });
+
+                            let confirmMsg = session.successMessage || `✅ تم بنجاح طلب <b>${session.productName}</b>!\n\nسيتواصل معك فريقنا قريباً.`;
+                            confirmMsg = confirmMsg.replace('{{product}}', session.productName).replace('{{phone}}', phoneNumber);
+                            
+                            await waSend(accessToken, phoneNumberId, from, confirmMsg);
+                            await CompanyChat.create({ company: companyId, user: from, text: confirmMsg, sender: 'ai', platform: 'whatsapp' });
+                            delete orderSessions[`wa_${from}`];
+                            return;
                         }
+
+                        // 2. INTERACTIVE LIST REPLY (Order placed)
+                        if (messageText.startsWith('order:')) {
+                            const productName = messageText.replace('order:', '');
+                            const matchedCmd = (integration.settings?.commands || []).find(c => 
+                                c.type === 'product_menu' && (c.products || []).some(p => p.name === productName)
+                            );
+                            const successMessage = matchedCmd?.successMessage || '';
+                            
+                            orderSessions[`wa_${from}`] = {
+                                productName,
+                                successMessage,
+                                timestamp: Date.now()
+                            };
+
+                            const reqPhoneMsg = `جميل! لقد اخترت: ${productName}.\n\nأرسل رقم الموبايل (11 رقم) لتأكيد الطلب 📱`;
+                            await waSend(accessToken, phoneNumberId, from, reqPhoneMsg);
+                            await CompanyChat.create({ company: companyId, user: from, text: reqPhoneMsg, sender: 'ai', platform: 'whatsapp' });
+                            return;
+                        }
+
+                        await CompanyChat.create({ company: companyId, user: from, text: messageText, sender: 'user', platform: 'whatsapp' });
+
+                        // 3. COMMAND MATCHING
+                        const cleanText = messageText.trim().toLowerCase();
+                        const commandConfig = (integration.settings?.commands || []).find(c => 
+                            cleanText === c.command || cleanText === `/${c.command}` || (c.keywords && c.keywords.includes(cleanText))
+                        );
+
+                        if (commandConfig) {
+                            if (commandConfig.type === 'fixed_message') {
+                                const replyMsg = commandConfig.message || "الرسالة الافتراضية.";
+                                await waSend(accessToken, phoneNumberId, from, replyMsg);
+                                await CompanyChat.create({ company: companyId, user: from, text: replyMsg, sender: 'ai', platform: 'whatsapp' });
+                            } else if (commandConfig.type === 'product_menu') {
+                                const products = commandConfig.products || [];
+                                if (products.length > 0) {
+                                    const introText = commandConfig.message || "اختر من القائمة المتاحة:";
+                                    await waSendProductMenu(accessToken, phoneNumberId, from, products, introText);
+                                    await CompanyChat.create({ company: companyId, user: from, text: introText, sender: 'ai', platform: 'whatsapp' });
+                                } else {
+                                    await waSend(accessToken, phoneNumberId, from, "لا توجد منتجات.");
+                                }
+                            }
+                            return;
+                        }
+
+                        // 4. DEFAULT AI REPLY
+                        const context = await getCompanyAIContext(company);
+                        const history = await getChatHistory(companyId, from, 'whatsapp', 5);
+                        const historyContext = formatHistoryForPrompt(history);
+                        const reply = await fetchAiResponse(`${context}\n\n${historyContext}User Question:\n${messageText}`);
+
+                        await waSend(accessToken, phoneNumberId, from, reply);
+                        await CompanyChat.create({ company: companyId, user: from, text: reply, sender: 'ai', platform: 'whatsapp' });
                     }
                 }
             }
         }
     } catch (error) {
         console.error('❌ Error handling WhatsApp message:', error.message);
-        throw error;
+    }
+};
+
+/**
+ * Instagram Webhook Handler
+ */
+export const handleInstagramWebhook = async (body) => {
+    try {
+        if (body.object !== 'instagram' && body.object !== 'page') return;
+
+        for (const entry of body.entry) {
+            if (entry.changes) {
+                for (const change of entry.changes) {
+                    // Instagram Comments AI Auto-Reply
+                    if (change.field === 'comments') {
+                        const comment = change.value;
+                        if (!comment || !comment.id) continue;
+                        
+                        // Prevent duplicates
+                        const msgId = `ig_c_${comment.id}`;
+                        if (processedMessages.has(msgId)) continue;
+                        processedMessages.add(msgId);
+
+                        const text = comment.text?.toLowerCase() || '';
+
+                        // Look up IG integration by page ID (meta webhook payload page id)
+                        const integration = await Integration.findOne({ platform: 'instagram', isActive: true }); 
+                        // Note: In real production, filter by `credentials.pageId: entry.id` or similar
+                        
+                        if (!integration || !integration.company) continue;
+
+                        // Check IG settings for comment auto-reply rules
+                        const autoReplies = integration.settings?.commentRules || [];
+                        const matchedRule = autoReplies.find(rule => 
+                            rule.triggerWord && text.includes(rule.triggerWord.toLowerCase())
+                        );
+
+                        if (matchedRule && matchedRule.replyMessage) {
+                            console.log(`💬 Instagram Comment Match! Sending reply via DM for: ${matchedRule.triggerWord}`);
+                            // Sends private reply via DM to the commenter
+                            const pageAccessToken = integration.credentials.accessToken;
+                            await axios.post(
+                                `https://graph.facebook.com/v18.0/${entry.id}/messages`,
+                                {
+                                    recipient: { comment_id: comment.id },
+                                    message: { text: matchedRule.replyMessage }
+                                },
+                                { headers: { Authorization: `Bearer ${pageAccessToken}` } }
+                            ).catch(e => console.error("IG DM Error", e.message));
+                        }
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.error("IG Webhook Error: ", e.message);
     }
 };
 

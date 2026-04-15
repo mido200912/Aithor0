@@ -281,6 +281,43 @@ router.post('/website', requireAuth, async (req, res) => {
     }
 });
 
+// @route   POST /api/integration-manager/instagram/rules
+// @desc    Configure Instagram Comment Auto-Reply Rules
+// @access  Private
+router.post('/instagram/rules', requireAuth, async (req, res) => {
+    try {
+        const { commentRules } = req.body;
+        const company = await Company.findOne({ owner: req.user._id });
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        let integration = await Integration.findOne({ company: company._id, platform: 'instagram' });
+        
+        // If it doesn't exist, we create a placeholder. 
+        // Note: Real IG integration usually happens via Meta OAuth first to get tokens.
+        if (!integration) {
+            integration = await Integration.create({
+                company: company._id,
+                platform: 'instagram',
+                credentials: {}, // Will be filled by Meta OAuth
+                settings: { commentRules: commentRules || [] },
+                isActive: true
+            });
+        } else {
+            integration.settings = { ...integration.settings, commentRules: commentRules || [] };
+            integration.isActive = true;
+            await integration.save();
+        }
+
+        res.json({ message: 'Instagram rules configured successfully!', integration });
+    } catch (error) {
+        console.error('Instagram rules configuration error:', error);
+        res.status(500).json({ error: 'Server error configure Instagram rules' });
+    }
+});
+
+
 // @route   POST /api/integration-manager/request-reveal-otp
 // @desc    Send OTP to user email to reveal sensitive bot token
 // @access  Private

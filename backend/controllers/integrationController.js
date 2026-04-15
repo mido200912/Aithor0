@@ -1,7 +1,7 @@
 import axios from 'axios';
 import crypto from 'crypto';
 import Integration from '../models/Integration.js';
-import { handleWhatsAppMessage } from './webhookHandler.js';
+import { handleWhatsAppMessage, handleInstagramWebhook } from './webhookHandler.js';
 
 // Helper to get base URL
 const BASE_URL = process.env.BASE_URL || 'https://dba7260ec6cd.ngrok-free.app';
@@ -50,10 +50,10 @@ const verifyShopifyWebhook = (req) => {
 };
 
 // ----------------------------------------------------------------------
-// 🌐 Meta Integrations (Facebook/Instagram/WhatsApp)
+// 🌐 Meta Integrations (Instagram/WhatsApp)
 // ----------------------------------------------------------------------
 
-// @desc    Initiate Meta OAuth
+// @desc    Initiate Meta OAuth
 const metaLogin = (req, res) => {
   const { companyId } = req.query;
   if (!companyId) return res.status(400).send('Company ID required');
@@ -65,14 +65,15 @@ const metaLogin = (req, res) => {
   const nonce = generateNonce(companyId);
   const state = `${companyId}:${nonce}`;
 
-  const scope = 'pages_show_list,pages_messaging,instagram_basic,instagram_manage_messages,whatsapp_business_messaging';
+  // Scopes for Instagram and WhatsApp (Dropped fb messaging intentionally)
+  const scope = 'pages_show_list,instagram_basic,instagram_manage_messages,instagram_manage_comments,whatsapp_business_messaging';
 
   const authUrl = `https://www.facebook.com/v18.0/dialog/oauth?client_id=${appId}&redirect_uri=${redirectUri}&state=${state}&scope=${scope}`;
 
   res.redirect(authUrl);
 };
 
-// @desc    Handle Meta OAuth Callback
+// @desc    Handle Meta OAuth Callback
 const metaCallback = async (req, res) => {
   const { code, state, error } = req.query;
 
@@ -102,33 +103,31 @@ const metaCallback = async (req, res) => {
 
     const page = pagesData.data?.[0]; // نأخذ الأولى لتبسيط MVP
 
-    if (!page) return res.status(400).send('No Facebook Pages found for this account.');
+    if (!page) return res.status(400).send('No Meta Pages found for this account.');
 
-    // 4. Save Integration
-    let fbIntegration = await Integration.findOne({ company: companyId, platform: 'facebook' });
-    if (!fbIntegration) {
+    // 4. Save Integration for Instagram
+    let igIntegration = await Integration.findOne({ company: companyId, platform: 'instagram' });
+    if (!igIntegration) {
       await Integration.create({
-        company: companyId, platform: 'facebook',
+        company: companyId, platform: 'instagram',
         credentials: { accessToken: page.access_token, pageId: page.id, userAccessToken },
         isActive: true
       });
     } else {
-      fbIntegration.credentials = { accessToken: page.access_token, pageId: page.id, userAccessToken };
-      fbIntegration.isActive = true;
-      await fbIntegration.save();
+      igIntegration.credentials = { accessToken: page.access_token, pageId: page.id, userAccessToken };
+      igIntegration.isActive = true;
+      await igIntegration.save();
     }
 
-    // 💡 يجب هنا تسجيل الـ Webhooks للصفحة (بواسطة رمز الصفحة)
-
-    res.redirect('http://localhost:3000/dashboard?status=success&platform=facebook');
+    res.redirect('http://localhost:3000/dashboard?status=success&platform=instagram');
 
   } catch (err) {
     console.error('Meta Auth Error:', err.response?.data || err.message);
-    res.redirect('http://localhost:3000/dashboard?status=error&platform=facebook');
+    res.redirect('http://localhost:3000/dashboard?status=error&platform=instagram');
   }
 };
 
-// @desc    Handle Meta Webhooks (Messenger, Instagram, WhatsApp)
+// @desc    Handle Meta Webhooks (Instagram, WhatsApp)
 const metaWebhook = async (req, res) => {
   // 1. Verification challenge
   if (req.query['hub.mode'] === 'subscribe' && req.query['hub.verify_token']) {
@@ -143,14 +142,15 @@ const metaWebhook = async (req, res) => {
   try {
     const body = req.body; // Already parsed by express.json()
 
-    console.log(`Received Meta webhook [${body.object}]:`, JSON.stringify(body, null, 2));
-
-    // Handle WhatsApp messages
-    await handleWhatsAppMessage(body);
+    if (body.object === 'whatsapp_business_account') {
+        await handleWhatsAppMessage(body);
+    } else if (body.object === 'instagram' || body.object === 'page') {
+        await handleInstagramWebhook(body);
+    }
 
     res.sendStatus(200);
   } catch (error) {
-    console.error(error);
+    console.error("Webhook processing error:", error.message);
     res.sendStatus(500);
   }
 };

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useLanguage } from '../../context/LanguageContext';
+import { secureStorage } from '../../utils/secureStorage';
 import { motion } from 'framer-motion';
 import './DashboardHome.css';
 
@@ -20,7 +21,7 @@ const DashboardHome = () => {
     useEffect(() => {
         const fetchAnalytics = async () => {
             try {
-                const token = localStorage.getItem('token');
+                const token = secureStorage.getItem('token');
                 const response = await axios.get(`${BACKEND_URL}/company/analytics`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
@@ -113,8 +114,8 @@ const DashboardHome = () => {
                 <h3>{t.dashboard.homePage.recentActivity}</h3>
                 {stats.recentActivity.length > 0 ? (
                     <div className="activity-list">
-                        {stats.recentActivity.map((activity) => (
-                            <div key={activity.id} className="activity-item">
+                        {stats.recentActivity.map((activity, index) => (
+                            <div key={activity.id || index} className="activity-item">
                                 <div className="activity-icon">
                                     <i className="fas fa-comment-alt"></i>
                                 </div>
