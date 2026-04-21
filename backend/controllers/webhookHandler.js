@@ -69,24 +69,21 @@ export const handleWhatsAppMessage = async (body) => {
                         processedMessages.add(messageId);
                         if (processedMessages.size > 1000) processedMessages.delete(processedMessages.values().next().value);
 
-                        let integration = await Integration.findOne({
+                        const allWaIntegrations = await Integration.find({
                             platform: 'whatsapp',
-                            isActive: true,
-                            $or: [
-                                { 'credentials.phoneNumberId': phoneNumberId },
-                                { 'credentials.phoneNumberId': displayPhoneNumber },
-                                // Meta sometimes prefixes display phone number without strict formatting
-                                { 'credentials.phoneNumberId': displayPhoneNumber?.replace(/[^0-9]/g, '') }
-                            ]
+                            isActive: true
                         });
 
-                        // Fallback: Just grab the first active WhatsApp integration if there's only one.
-                        if (!integration) {
-                            const allWa = await Integration.find({ platform: 'whatsapp', isActive: true });
-                            if (allWa.length === 1) {
-                                integration = allWa[0];
-                                console.log(`[WhatsApp Webhook] Fallback: Mapped to the only active WhatsApp integration: ${integration.company}`);
-                            }
+                        let integration = allWaIntegrations.find(int => 
+                            int.credentials?.phoneNumberId === phoneNumberId || 
+                            int.credentials?.phoneNumberId === displayPhoneNumber ||
+                            (displayPhoneNumber && int.credentials?.phoneNumberId === displayPhoneNumber.replace(/[^0-9]/g, ''))
+                        );
+
+                        // Fallback: Just grab the first active WhatsApp integration if there's only one in the whole system.
+                        if (!integration && allWaIntegrations.length === 1) {
+                            integration = allWaIntegrations[0];
+                            console.log(`[WhatsApp Webhook] Fallback: Mapped to the only active WhatsApp integration: ${integration.company}`);
                         }
 
                         if (!integration || !integration.company) {
