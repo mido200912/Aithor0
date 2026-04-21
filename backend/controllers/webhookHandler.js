@@ -83,15 +83,16 @@ export const handleWhatsAppMessage = async (body) => {
                         const history = await getChatHistory(company._id, from, 'whatsapp', 5);
                         const historyContext = formatHistoryForPrompt(history);
 
-                        const reply = await fetchAiResponse(`${context}\n\n${historyContext}User Question:\n${messageText}`);
-
                         const CompanyChat = (await import('../models/CompanyChat.js')).default;
                         await CompanyChat.create({ company: company._id, user: from, text: messageText, sender: 'user', platform: 'whatsapp' });
+
+                        const reply = await fetchAiResponse(`${context}\n\n${historyContext}User Question:\n${messageText}`);
+
 
                         try {
                             await axios.post(
                                 `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
-                                { messaging_product: "whatsapp", to: from, text: { body: reply } },
+                                { messaging_product: "whatsapp", to: from, type: "text", text: { body: reply } },
                                 { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } }
                             );
                             await CompanyChat.create({ company: company._id, user: from, text: reply, sender: 'ai', platform: 'whatsapp' });
@@ -105,6 +106,147 @@ export const handleWhatsAppMessage = async (body) => {
     } catch (error) {
         console.error('❌ Error handling WhatsApp message:', error.message);
         throw error;
+    }
+};
+
+/**
+ * Instagram Webhook Handler
+ */
+export const handleInstagramWebhook = async (body) => {
+    try {
+        // Meta webhooks for Instagram usually have object === 'page' or 'instagram'
+        if (body.object !== 'page' && body.object !== 'instagram') return;
+
+        for (const entry of body.entry) {
+            // "id" here is usually the Facebook Page ID or IG Account ID
+            const receiverId = entry.id;
+
+            // Handle Messages (DM)
+            if (entry.messaging) {
+                for (const event of entry.messaging) {
+                    if (event.message && event.message.text && !event.message.is_echo) {
+                        const senderId = event.sender.id;
+                        const messageText = event.message.text;
+                        const messageId = event.message.mid;
+
+                        if (processedMessages.has(messageId)) continue;
+                        processedMessages.add(messageId);
+                        if (processedMessages.size > 1000) processedMessages.delete(processedMessages.values().next().value);
+
+                        // Find integration using the page ID or IG account ID
+                        const integration = await Integration.findOne({
+                            platform: 'instagram',
+                            isActive: true,
+                            $or: [{ 'credentials.pageId': receiverId }, { 'credentials.igAccountId': receiverId }]
+                        });
+
+                        if (!integration || !integration.company) continue;
+
+                        const accessToken = integration.credentials.accessToken;
+                        const settings = integration.settings || {};
+                        const chatbotRules = settings.chatbotRules || [];
+
+                        const CompanyChat = (await import('../models/CompanyChat.js')).default;
+                        await CompanyChat.create({ company: integration.company, user: senderId, text: messageText, sender: 'user', platform: 'instagram' });
+
+                        let replyMsg = null;
+
+                        // 1. Check if matches any exact rule
+                        const rule = chatbotRules.find(r => r.trigger.toLowerCase() === messageText.trim().toLowerCase());
+                        if (rule) {
+                            replyMsg = rule.response;
+                        } else {
+                            // 2. AI Fallback
+                            const company = await Company.findById(integration.company);
+                            if (company) {
+                                const context = await getCompanyAIContext(company);
+                                replyMsg = await fetchAiResponse(`${context}\n\nClient asking on Instagram: ${messageText}`);
+                            }
+                        }
+
+                        if (replyMsg) {
+                            await CompanyChat.create({ company: integration.company, user: senderId, text: replyMsg, sender: 'ai', platform: 'instagram' });
+                            // Send reply
+                            try {
+                                await axios.post(
+                                    `https://graph.facebook.com/v18.0/${integration.credentials.pageId}/messages`,
+                                    { recipient: { id: senderId }, message: { text: replyMsg } },
+                                    { params: { access_token: accessToken } }
+                                );
+                            } catch (err) {
+                                console.error('Error sending IG DM:', err.response?.data || err.message);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Handle Comments
+            if (entry.changes) {
+                for (const change of entry.changes) {
+                    if (change.field === 'comments') {
+                        const commentValue = change.value;
+                        const commentId = commentValue.id;
+                        const commentText = commentValue.text;
+                        const fromId = commentValue.from?.id;
+
+                        if (!fromId || !commentText) continue;
+
+                        if (processedMessages.has(commentId)) continue;
+                        processedMessages.add(commentId);
+                        if (processedMessages.size > 1000) processedMessages.delete(processedMessages.values().next().value);
+
+                        const integration = await Integration.findOne({
+                            platform: 'instagram',
+                            isActive: true,
+                            $or: [{ 'credentials.pageId': receiverId }, { 'credentials.igAccountId': receiverId }]
+                        });
+
+                        if (!integration || !integration.company) continue;
+
+                        const accessToken = integration.credentials.accessToken;
+                        const settings = integration.settings || {};
+                        const globalRules = settings.globalCommentRules || [];
+                        const dmClosedFallback = settings.dmClosedFallback || '';
+
+                        // Check global rules
+                        const matchedRule = globalRules.find(r => commentText.toLowerCase().includes(r.keyword.toLowerCase()));
+
+                        if (matchedRule) {
+                            let dmSuccess = false;
+
+                            // 1. Try to send DM first
+                            try {
+                                await axios.post(
+                                    `https://graph.facebook.com/v18.0/${integration.credentials.pageId}/messages`,
+                                    { recipient: { id: fromId }, message: { text: matchedRule.dmReply } },
+                                    { params: { access_token: accessToken } }
+                                );
+                                dmSuccess = true;
+                            } catch (dmErr) {
+                                console.error('Failed to send DM for comment:', dmErr.response?.data || dmErr.message);
+                                dmSuccess = false;
+                            }
+
+                            // 2. Reply to comment
+                            const commentReplyText = dmSuccess ? matchedRule.commentReply : (dmClosedFallback || matchedRule.commentReply);
+                            
+                            try {
+                                await axios.post(
+                                    `https://graph.facebook.com/v18.0/${commentId}/replies`,
+                                    { message: commentReplyText },
+                                    { params: { access_token: accessToken } }
+                                );
+                            } catch (replyErr) {
+                                console.error('Failed to reply to IG comment:', replyErr.response?.data || replyErr.message);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        console.error('❌ Error handling Instagram webhook:', error.message);
     }
 };
 

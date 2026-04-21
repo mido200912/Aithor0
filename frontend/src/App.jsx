@@ -12,11 +12,12 @@ import OnboardingConnect from './pages/onboarding/Connect';
 import ProtectedRoute from './components/ProtectedRoute';
 import DashboardLayout from './layouts/DashboardLayout';
 import DashboardHome from './pages/dashboard/Home';
-import Inbox from './pages/dashboard/Inbox';
 import AiTraining from './pages/dashboard/AiTraining';
 import Integrations from './pages/dashboard/Integrations';
 import TelegramTab from './pages/dashboard/TelegramTab';
 import WebsiteTab from './pages/dashboard/WebsiteTab';
+import WhatsappTab from './pages/dashboard/WhatsappTab';
+import InstagramTab from './pages/dashboard/InstagramTab';
 import ModelTest from './pages/dashboard/ModelTest';
 import Settings from './pages/dashboard/Settings';
 import Terms from './pages/Terms';
@@ -59,12 +60,13 @@ function App() {
                 {/* Dashboard routes */}
                 <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
                   <Route index element={<DashboardHome />} />
-                  <Route path="inbox" element={<Inbox />} />
                   <Route path="ai-training" element={<AiTraining />} />
                   <Route path="model-test" element={<ModelTest />} />
                   <Route path="integrations" element={<Integrations />} />
                   <Route path="telegram" element={<TelegramTab />} />
                   <Route path="website-chat" element={<WebsiteTab />} />
+                  <Route path="whatsapp" element={<WhatsappTab />} />
+                  <Route path="instagram" element={<InstagramTab />} />
                   <Route path="settings" element={<Settings />} />
                   <Route path="chatbot-editor" element={<ChatbotEditor />} />
                 </Route>

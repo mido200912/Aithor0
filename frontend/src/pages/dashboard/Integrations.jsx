@@ -97,7 +97,7 @@ const Integrations = () => {
             icon: 'whatsapp',
             color: '#25d366',
             descKey: 'whatsappDesc',
-            available: false
+            available: true
         },
         {
             id: 'telegram',
@@ -121,7 +121,7 @@ const Integrations = () => {
             icon: 'instagram',
             color: '#e4405f',
             descKey: 'instagramDesc',
-            available: false
+            available: true
         },
         {
             id: 'facebook',
@@ -186,8 +186,8 @@ const Integrations = () => {
         if (!integration.available) return;
 
         try {
-            const userStr = localStorage.getItem('user');
-            const user = userStr ? JSON.parse(userStr) : null;
+            const userStr = secureStorage.getItem('user');
+            const user = userStr ? userStr : null;
 
             if (integration.id === 'facebook' || integration.id === 'instagram') {
                 const companyRes = await axios.get(`${BACKEND_URL}/company`, {
@@ -519,7 +519,7 @@ const Integrations = () => {
                         <code>
 {`<script 
   src="https://voxio1.vercel.app/widget.js" 
-  data-api-key="${JSON.parse(localStorage.getItem('user'))?.apiKey || 'YOUR_API_KEY'}" 
+  data-api-key="${secureStorage.getItem('user')?.apiKey || 'YOUR_API_KEY'}" 
   data-base-url="https://voxio-v1.vercel.app"
 ></script>`}
                         </code>

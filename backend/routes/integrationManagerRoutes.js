@@ -40,6 +40,52 @@ router.get('/', requireAuth, async (req, res) => {
     }
 });
 
+// @route   GET /api/integration-manager/:platform/settings
+// @desc    Get detailed settings for a specific platform
+// @access  Private
+router.get('/:platform/settings', requireAuth, async (req, res) => {
+    try {
+        const company = await Company.findOne({ owner: req.user._id });
+        if (!company) return res.status(404).json({ error: 'Company not found' });
+
+        const integration = await Integration.findOne({ company: company._id, platform: req.params.platform });
+        if (!integration) return res.status(404).json({ error: 'Integration not found' });
+
+        res.json({ settings: integration.settings || {} });
+    } catch (error) {
+        console.error('Error fetching integration settings:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// @route   PUT /api/integration-manager/:platform/settings
+// @desc    Update settings for a specific platform
+// @access  Private
+router.put('/:platform/settings', requireAuth, async (req, res) => {
+    try {
+        const company = await Company.findOne({ owner: req.user._id });
+        if (!company) return res.status(404).json({ error: 'Company not found' });
+
+        let integration = await Integration.findOne({ company: company._id, platform: req.params.platform });
+        if (!integration) {
+            integration = new Integration({
+                company: company._id,
+                platform: req.params.platform,
+                isActive: true,
+                settings: req.body
+            });
+        } else {
+            integration.settings = { ...integration.settings, ...req.body };
+        }
+        await integration.save();
+
+        res.json({ message: 'Settings updated successfully', settings: integration.settings });
+    } catch (error) {
+        console.error('Error updating integration settings:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
 // @route   DELETE /api/integration-manager/:id
 // @desc    Delete/disconnect an integration
 // @access  Private

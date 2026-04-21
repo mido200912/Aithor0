@@ -4,6 +4,8 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import axios from 'axios';
+import { secureStorage } from '../utils/secureStorage';
 import './DashboardLayout.css';
 
 const DashboardLayout = () => {
@@ -12,6 +14,24 @@ const DashboardLayout = () => {
     const { theme, toggleTheme } = useTheme();
     const location = useLocation();
     const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 768);
+    const [activeIntegrations, setActiveIntegrations] = useState([]);
+
+    useEffect(() => {
+        const fetchIntegrations = async () => {
+            const token = secureStorage.getItem('token');
+            if (!token) return;
+            try {
+                const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://aithor1.vercel.app/api';
+                const res = await axios.get(`${BACKEND_URL}/integration-manager`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                setActiveIntegrations(res.data.filter(i => i.isActive).map(i => i.platform));
+            } catch (err) {
+                console.error('Failed to fetch integrations sidebar:', err);
+            }
+        };
+        fetchIntegrations();
+    }, [location.pathname]);
 
     useEffect(() => {
         const handleResize = () => {
@@ -80,12 +100,6 @@ const DashboardLayout = () => {
                             </Link>
                         </li>
                         <li>
-                            <Link to="/dashboard/inbox" className={`nav-item ${isActive('/dashboard/inbox')}`} onClick={handleNavItemClick}>
-                                <i className="fas fa-inbox"></i>
-                                {isSidebarOpen && <span>{t.dashboard.inbox}</span>}
-                            </Link>
-                        </li>
-                        <li>
                             <Link to="/dashboard/ai-training" className={`nav-item ${isActive('/dashboard/ai-training')}`} onClick={handleNavItemClick}>
                                 <i className="fas fa-brain"></i>
                                 {isSidebarOpen && <span>{t.dashboard.training}</span>}
@@ -115,6 +129,22 @@ const DashboardLayout = () => {
                                 {isSidebarOpen && <span>{language === 'ar' ? 'موقع الويب' : 'Website'}</span>}
                             </Link>
                         </li>
+                        {activeIntegrations.includes('whatsapp') && (
+                        <li>
+                            <Link to="/dashboard/whatsapp" className={`nav-item ${isActive('/dashboard/whatsapp')}`} onClick={handleNavItemClick}>
+                                <i className="fab fa-whatsapp"></i>
+                                {isSidebarOpen && <span>{language === 'ar' ? 'واتساب' : 'WhatsApp'}</span>}
+                            </Link>
+                        </li>
+                        )}
+                        {activeIntegrations.includes('instagram') && (
+                        <li>
+                            <Link to="/dashboard/instagram" className={`nav-item ${isActive('/dashboard/instagram')}`} onClick={handleNavItemClick}>
+                                <i className="fab fa-instagram"></i>
+                                {isSidebarOpen && <span>{language === 'ar' ? 'إنستاجرام' : 'Instagram'}</span>}
+                            </Link>
+                        </li>
+                        )}
                         <li>
                             <Link to="/dashboard/chatbot-editor" className={`nav-item ${isActive('/dashboard/chatbot-editor')}`} onClick={handleNavItemClick}>
                                 <i className="fas fa-wand-magic-sparkles"></i>

@@ -158,7 +158,6 @@ export const translations = {
         },
         dashboard: {
             home: 'لوحة القيادة',
-            inbox: 'المحادثات',
             training: 'تدريب البوت',
             modelTest: 'اختبار النموذج',
             integrations: 'التكاملات',
@@ -191,22 +190,6 @@ export const translations = {
                 customDesc: 'قم بتخصيص سلوك البوت وأسلوب الرد الخاص به',
                 customPlaceholder: 'مثال: كن مهذباً ومحترفاً دائماً. الرد بالعربية فقط...',
                 saveCustom: 'حفظ التعليمات'
-            },
-            inboxPage: {
-                title: 'المحادثات',
-                search: 'بحث في المحادثات...',
-                loading: 'جاري التحميل...',
-                noConversations: 'لا توجد محادثات حتى الآن',
-                yesterday: 'أمس',
-                trainTitle: 'استخراج معلومات من هذه المحادثة لتحسين ردود البوت',
-                training: 'جاري التدريب...',
-                trainBot: 'تدريب البوت',
-                typeMessage: 'اكتب رسالة...',
-                selectConv: 'اختر محادثة للبدء',
-                selectConvDesc: 'يمكنك التواصل مع عملائك من جميع المنصات في مكان واحد',
-                sendError: 'حدث خطأ أثناء إرسال الرسالة',
-                addedInst: 'تمت إضافة',
-                trainError: 'حدث خطأ أثناء تدريب النموذج'
             },
             integrationsPage: {
                 title: 'التكاملات',
@@ -425,7 +408,6 @@ export const translations = {
         },
         dashboard: {
             home: 'Dashboard',
-            inbox: 'Inbox',
             training: 'AI Training',
             modelTest: 'Model Test',
             integrations: 'Integrations',
@@ -458,22 +440,6 @@ export const translations = {
                 customDesc: 'Customize the bot behavior and response style',
                 customPlaceholder: 'Example: Always be polite and professional. Respond only in English...',
                 saveCustom: 'Save Instructions'
-            },
-            inboxPage: {
-                title: 'Inbox',
-                search: 'Search conversations...',
-                loading: 'Loading...',
-                noConversations: 'No conversations yet',
-                yesterday: 'Yesterday',
-                trainTitle: 'Extract info from this chat to improve bot responses',
-                training: 'Training...',
-                trainBot: 'Train Bot',
-                typeMessage: 'Type a message...',
-                selectConv: 'Select a conversation to start',
-                selectConvDesc: 'Communicate with your customers from all platforms in one place',
-                sendError: 'Error sending message',
-                addedInst: 'Added:',
-                trainError: 'Error training model'
             },
             integrationsPage: {
                 title: 'Integrations',

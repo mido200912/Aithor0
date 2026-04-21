@@ -1,7 +1,7 @@
 import axios from 'axios';
 import crypto from 'crypto';
 import Integration from '../models/Integration.js';
-import { handleWhatsAppMessage } from './webhookHandler.js';
+import { handleWhatsAppMessage, handleInstagramWebhook } from './webhookHandler.js';
 
 // Helper to get base URL
 const BASE_URL = process.env.BASE_URL || 'https://dba7260ec6cd.ngrok-free.app';
@@ -104,7 +104,7 @@ const metaCallback = async (req, res) => {
 
     if (!page) return res.status(400).send('No Facebook Pages found for this account.');
 
-    // 4. Save Integration
+    // 4. Save Integrations
     let fbIntegration = await Integration.findOne({ company: companyId, platform: 'facebook' });
     if (!fbIntegration) {
       await Integration.create({
@@ -118,9 +118,42 @@ const metaCallback = async (req, res) => {
       await fbIntegration.save();
     }
 
-    // 💡 يجب هنا تسجيل الـ Webhooks للصفحة (بواسطة رمز الصفحة)
+    // 5. Fetch linked Instagram Business Account
+    try {
+      const igUrl = `https://graph.facebook.com/v18.0/${page.id}?fields=instagram_business_account&access_token=${page.access_token}`;
+      const { data: igData } = await axios.get(igUrl);
+      if (igData.instagram_business_account) {
+        const igAccountId = igData.instagram_business_account.id;
+        let igIntegration = await Integration.findOne({ company: companyId, platform: 'instagram' });
+        if (!igIntegration) {
+          await Integration.create({
+            company: companyId, platform: 'instagram',
+            credentials: { accessToken: page.access_token, pageId: page.id, igAccountId, userAccessToken },
+            isActive: true
+          });
+        } else {
+          igIntegration.credentials = { accessToken: page.access_token, pageId: page.id, igAccountId, userAccessToken };
+          igIntegration.isActive = true;
+          await igIntegration.save();
+        }
+      }
+    } catch (igError) {
+      console.error('Failed to fetch linked Instagram account:', igError?.response?.data || igError.message);
+    }
 
-    res.redirect('http://localhost:3000/dashboard?status=success&platform=facebook');
+    // 💡 يجب هنا تسجيل الـ Webhooks للصفحة (بواسطة رمز الصفحة)
+    // Subscribe to messages and comments
+    try {
+      await axios.post(`https://graph.facebook.com/v18.0/${page.id}/subscribed_apps`, {
+         subscribed_fields: ['messages', 'messaging_postbacks', 'feed', 'instagram_manage_messages', 'instagram_manage_comments']
+      }, {
+         headers: { Authorization: `Bearer ${page.access_token}` }
+      });
+    } catch(subErr) {
+       console.error('Webhook subscription error:', subErr?.response?.data || subErr.message);
+    }
+
+    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?status=success&platform=meta`);
 
   } catch (err) {
     console.error('Meta Auth Error:', err.response?.data || err.message);
@@ -145,13 +178,24 @@ const metaWebhook = async (req, res) => {
 
     console.log(`Received Meta webhook [${body.object}]:`, JSON.stringify(body, null, 2));
 
-    // Handle WhatsApp messages
-    await handleWhatsAppMessage(body);
-
+    // Acknowledge Meta immediately to prevent timeout and retries
     res.sendStatus(200);
+
+    // Process asynchronously without blocking the webhook acknowledgment
+    Promise.resolve().then(async () => {
+        try {
+            // Handle WhatsApp messages
+            await handleWhatsAppMessage(body);
+
+            // Handle Instagram messages and comments
+            await handleInstagramWebhook(body);
+        } catch (asyncErr) {
+            console.error('Async Webhook Processing Error:', asyncErr);
+        }
+    });
+
   } catch (error) {
     console.error(error);
-    res.sendStatus(500);
   }
 };
 
