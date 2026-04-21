@@ -59,23 +59,46 @@ export const handleWhatsAppMessage = async (body) => {
                         const message = value.messages[0];
                         const messageId = message.id;
                         const from = message.from;
-                        const messageText = message.text?.body;
+                        const messageText = message.text?.body || '[Non-text message]';
                         const phoneNumberId = value.metadata.phone_number_id;
+                        const displayPhoneNumber = value.metadata.display_phone_number;
+                        
+                        console.log(`[WhatsApp Webhook] Received message from ${from} to ${phoneNumberId} (Display: ${displayPhoneNumber}): ${messageText.substring(0, 30)}`);
 
                         if (processedMessages.has(messageId)) continue;
                         processedMessages.add(messageId);
                         if (processedMessages.size > 1000) processedMessages.delete(processedMessages.values().next().value);
 
-                        const integration = await Integration.findOne({
-                            'credentials.phoneNumberId': phoneNumberId,
+                        let integration = await Integration.findOne({
                             platform: 'whatsapp',
-                            isActive: true
+                            isActive: true,
+                            $or: [
+                                { 'credentials.phoneNumberId': phoneNumberId },
+                                { 'credentials.phoneNumberId': displayPhoneNumber },
+                                // Meta sometimes prefixes display phone number without strict formatting
+                                { 'credentials.phoneNumberId': displayPhoneNumber?.replace(/[^0-9]/g, '') }
+                            ]
                         });
 
-                        if (!integration || !integration.company) continue;
+                        // Fallback: Just grab the first active WhatsApp integration if there's only one.
+                        if (!integration) {
+                            const allWa = await Integration.find({ platform: 'whatsapp', isActive: true });
+                            if (allWa.length === 1) {
+                                integration = allWa[0];
+                                console.log(`[WhatsApp Webhook] Fallback: Mapped to the only active WhatsApp integration: ${integration.company}`);
+                            }
+                        }
+
+                        if (!integration || !integration.company) {
+                            console.log(`[WhatsApp Webhook] Int/Company not found for phoneNumberId: ${phoneNumberId} or ${displayPhoneNumber}`);
+                            continue;
+                        }
 
                         const company = await Company.findById(integration.company);
-                        if (!company) continue;
+                        if (!company) {
+                            console.log(`[WhatsApp Webhook] Associated company not found in DB!`);
+                            continue;
+                        }
                         const accessToken = integration.credentials.accessToken;
 
                         const context = await getCompanyAIContext(company);
@@ -84,9 +107,16 @@ export const handleWhatsAppMessage = async (body) => {
                         const historyContext = formatHistoryForPrompt(history);
 
                         const CompanyChat = (await import('../models/CompanyChat.js')).default;
-                        await CompanyChat.create({ company: company._id, user: from, text: messageText, sender: 'user', platform: 'whatsapp' });
+                        try {
+                            await CompanyChat.create({ company: company._id, user: from, text: messageText, sender: 'user', platform: 'whatsapp' });
+                            console.log(`[WhatsApp Webhook] Saved user chat in DB successfully.`);
+                        } catch (dbErr) {
+                            console.error(`[WhatsApp Webhook] Error saving user message:`, dbErr.message);
+                        }
 
+                        console.log(`[WhatsApp Webhook] Fetching AI response...`);
                         const reply = await fetchAiResponse(`${context}\n\n${historyContext}User Question:\n${messageText}`);
+                        console.log(`[WhatsApp Webhook] AI generated response: ${reply.substring(0, 30)}...`);
 
 
                         try {
