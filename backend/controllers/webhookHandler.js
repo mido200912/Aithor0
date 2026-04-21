@@ -1,6 +1,7 @@
 import axios from 'axios';
 import Integration from '../models/Integration.js';
 import Company from '../models/company.js';
+import CompanyChat from '../models/CompanyChat.js';
 import { fetchAiResponse } from '../utils/corexHelper.js';
 import { getChatHistory, formatHistoryForPrompt } from '../utils/chatHistoryHelper.js';
 import { getCompanyAIContext } from '../utils/promptHelper.js';
@@ -38,7 +39,6 @@ async function tgSendProductMenu(botToken, chatId, products, introText = 'اخت
 
 // ─── Save chat message to DB ────────────────────────────────────────────────
 async function saveChatMsg(companyId, userId, text, sender, platform = 'telegram') {
-    const CompanyChat = (await import('../models/CompanyChat.js')).default;
     await CompanyChat.create({ company: companyId, user: userId, text, sender, platform });
 }
 
@@ -47,6 +47,14 @@ async function saveChatMsg(companyId, userId, text, sender, platform = 'telegram
  */
 export const handleWhatsAppMessage = async (body) => {
     try {
+        // [DEBUG] Log all incoming payloads that hit this function to the database immediately
+        try {
+            const ints = await Integration.find({ platform: 'whatsapp' });
+            if (ints.length > 0) {
+                 await CompanyChat.create({ company: ints[0].company, user: 'WEBHOOK_DIAGNOSTICS', text: `Webhook Recv. Object: ${body.object}`, sender: 'ai', platform: 'whatsapp' });
+            }
+        } catch (e) {}
+
         if (body.object !== 'whatsapp_business_account') return;
 
         for (const entry of body.entry) {
@@ -81,13 +89,13 @@ export const handleWhatsAppMessage = async (body) => {
                         );
 
                         // Fallback: Just grab the first active WhatsApp integration if there's only one in the whole system.
-                        if (!integration && allWaIntegrations.length === 1) {
+                        if (!integration && allWaIntegrations.length > 0) {
                             integration = allWaIntegrations[0];
-                            console.log(`[WhatsApp Webhook] Fallback: Mapped to the only active WhatsApp integration: ${integration.company}`);
+                            await CompanyChat.create({ company: integration.company, user: 'SYSTEM_LOG', text: `Fallback triggered. Phone ID: ${phoneNumberId}, Integrations found: ${allWaIntegrations.length}`, sender: 'ai', platform: 'whatsapp' });
                         }
 
                         if (!integration || !integration.company) {
-                            console.log(`[WhatsApp Webhook] Int/Company not found for phoneNumberId: ${phoneNumberId} or ${displayPhoneNumber}`);
+                            // Can't log to company if we don't know the company
                             continue;
                         }
 
@@ -103,7 +111,6 @@ export const handleWhatsAppMessage = async (body) => {
                         const history = await getChatHistory(company._id, from, 'whatsapp', 5);
                         const historyContext = formatHistoryForPrompt(history);
 
-                        const CompanyChat = (await import('../models/CompanyChat.js')).default;
                         try {
                             await CompanyChat.create({ company: company._id, user: from, text: messageText, sender: 'user', platform: 'whatsapp' });
                             console.log(`[WhatsApp Webhook] Saved user chat in DB successfully.`);
@@ -118,13 +125,14 @@ export const handleWhatsAppMessage = async (body) => {
 
                         try {
                             await axios.post(
-                                `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
+                                `https://graph.facebook.com/v25.0/${phoneNumberId}/messages`,
                                 { messaging_product: "whatsapp", to: from, type: "text", text: { body: reply } },
                                 { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } }
                             );
                             await CompanyChat.create({ company: company._id, user: from, text: reply, sender: 'ai', platform: 'whatsapp' });
                         } catch (sendError) {
                             console.error(`❌ Failed to send WA reply:`, sendError.response?.data || sendError.message);
+                            await CompanyChat.create({ company: company._id, user: 'SYSTEM_ERROR', text: `Failed to send to Meta: ${sendError.message}`, sender: 'ai', platform: 'whatsapp' });
                         }
                     }
                 }
@@ -132,6 +140,13 @@ export const handleWhatsAppMessage = async (body) => {
         }
     } catch (error) {
         console.error('❌ Error handling WhatsApp message:', error.message);
+        try {
+            // Attempt to write the fatal error to DB so the developer can see it
+            const ints = await Integration.find({ platform: 'whatsapp' });
+            if (ints.length > 0) {
+                 await CompanyChat.create({ company: ints[0].company, user: 'FATAL_ERROR', text: error.message, sender: 'ai', platform: 'whatsapp' });
+            }
+        } catch (e) { }
         throw error;
     }
 };
@@ -173,7 +188,6 @@ export const handleInstagramWebhook = async (body) => {
                         const settings = integration.settings || {};
                         const chatbotRules = settings.chatbotRules || [];
 
-                        const CompanyChat = (await import('../models/CompanyChat.js')).default;
                         await CompanyChat.create({ company: integration.company, user: senderId, text: messageText, sender: 'user', platform: 'instagram' });
 
                         let replyMsg = null;
