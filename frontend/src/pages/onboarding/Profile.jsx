@@ -45,7 +45,7 @@ const OnboardingProfile = () => {
             navigate('/dashboard');
         } catch (error) {
             console.error("Error updating profile:", error);
-            alert("حدث خطأ أثناء حفظ البيانات. يرجى المحاولة مرة أخرى.");
+            alert("حدث خطأ: " + (error.response?.data?.error || error.message));
         } finally {
             setLoading(false);
         }
