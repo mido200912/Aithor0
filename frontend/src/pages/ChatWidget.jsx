@@ -19,16 +19,26 @@ const ChatWidget = ({ apiKeyProp }) => {
 
     useEffect(() => {
         // Fetch company data and widget config
+        const queryParams = new URLSearchParams(window.location.search);
+        const overrideColor = queryParams.get('color');
+        const overrideWelcome = queryParams.get('welcome');
+        const overrideCss = queryParams.get('css');
+
         axios.get(`${API}/public/company/${apiKey}`)
             .then(({ data }) => {
                 if (data.success) {
                     setCompany(data.company);
-                    if (data.company.widgetConfig) {
-                        setConfig(data.company.widgetConfig);
-                    }
+                    const baseConfig = data.company.widgetConfig || {};
+                    const finalConfig = {
+                        ...baseConfig,
+                        primaryColor: overrideColor || baseConfig.primaryColor || '#6C63FF',
+                        welcomeMessage: overrideWelcome || baseConfig.welcomeMessage || `مرحباً! أنا المساعد الذكي لـ **${data.company.name}**. كيف يمكنني مساعدتك اليوم؟`,
+                        customCss: overrideCss || baseConfig.customCss || ''
+                    };
+                    setConfig(finalConfig);
                     setMessages([{
                         role: 'ai',
-                        text: data.company.widgetConfig?.welcomeMessage || `مرحباً! أنا المساعد الذكي لـ **${data.company.name}**. كيف يمكنني مساعدتك اليوم؟`,
+                        text: finalConfig.welcomeMessage,
                         time: new Date(),
                     }]);
                 }
@@ -81,10 +91,10 @@ const ChatWidget = ({ apiKeyProp }) => {
             {/* Header */}
             <header className="vx-widget-header">
                 <div className="vx-avatar-main" style={{ background: color }}>
-                    {company.name[0].toUpperCase()}
+                    {company?.name ? company.name[0].toUpperCase() : '🤖'}
                 </div>
                 <div className="vx-header-info">
-                    <h2>{company.name}</h2>
+                    <h2>{company?.name || 'Support'}</h2>
                     <div className="vx-status">
                         <span className="vx-dot" />
                         <span>متصل الآن</span>
