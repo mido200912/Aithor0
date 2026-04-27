@@ -73,7 +73,19 @@ app.use(xssClean);
 // ✅ إعداد حماية أكبر للموقع (Security Middlewares)
 app.use(helmet({
     crossOriginOpenerPolicy: { policy: "unsafe-none" },
-    crossOriginResourcePolicy: { policy: "cross-origin" }
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    frameguard: false, // Allow iframes
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "*.fontawesome.com", "*.vercel.app"],
+            styleSrc: ["'self'", "'unsafe-inline'", "fonts.googleapis.com", "cdnjs.cloudflare.com", "*.fontawesome.com"],
+            fontSrc: ["'self'", "fonts.gstatic.com", "cdnjs.cloudflare.com", "*.fontawesome.com"],
+            imgSrc: ["'self'", "data:", "blob:", "*.vercel.app"],
+            connectSrc: ["'self'", "*.vercel.app", "http://localhost:5000", "https://aithor1.vercel.app"],
+            frameAncestors: ["'self'", "http://localhost:5173", "https://voxio-v1.vercel.app", "*.vercel.app"],
+        },
+    }
 }));
 
 app.set('trust proxy', 1);
@@ -113,7 +125,7 @@ app.get("/", (req, res) => {
 // ✅ Serve Widget JS Direct Content (Premium Redesigned Version)
 app.get('/widget.js', (req, res) => {
     res.setHeader('Content-Type', 'application/javascript');
-    const baseUrl = process.env.BASE_URL || 'https://aithor1.vercel.app';
+    const baseUrl = process.env.FRONTEND_URL || 'https://voxio-v1.vercel.app';
     const widgetCode = `
 (function() {
     const script = document.currentScript;
@@ -125,7 +137,6 @@ app.get('/widget.js', (req, res) => {
         return;
     }
 
-    // Load Fonts & Icons
     const link = document.createElement('link');
     link.rel = 'stylesheet';
     link.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css';
@@ -159,20 +170,6 @@ app.get('/widget.js', (req, res) => {
         }
         #voxio-w-btn:hover { transform: scale(1.05) rotate(5deg); }
         #voxio-w-btn i { font-size: 24px; transition: all 0.3s; }
-        #voxio-w-btn .pulse {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            background: var(--vx-primary);
-            opacity: 0.5;
-            z-index: -1;
-            animation: vx-pulse 2s infinite;
-        }
-        @keyframes vx-pulse {
-            0% { transform: scale(1); opacity: 0.5; }
-            100% { transform: scale(1.5); opacity: 0; }
-        }
         #voxio-w-window {
             position: absolute;
             bottom: 80px;
@@ -183,7 +180,6 @@ app.get('/widget.js', (req, res) => {
             max-height: calc(100vh - 120px);
             background: rgba(255, 255, 255, 0.98);
             backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
             border-radius: 24px;
             box-shadow: 0 20px 50px rgba(0,0,0,0.2);
             display: none;
@@ -206,29 +202,6 @@ app.get('/widget.js', (req, res) => {
             height: 100%;
             background: transparent;
         }
-        .vx-powered {
-            position: absolute;
-            bottom: 6px;
-            right: 0;
-            left: 0;
-            text-align: center;
-            font-size: 10px;
-            color: rgba(0,0,0,0.3);
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.3s;
-            z-index: 10;
-        }
-        #voxio-w-window.vx-open .vx-powered { opacity: 1; }
-        
-        @media (max-width: 480px) {
-            #voxio-w-window {
-                width: calc(100vw - 32px);
-                height: calc(100vh - 100px);
-                bottom: 72px;
-                right: -4px;
-            }
-        }
     \`;
     document.head.appendChild(style);
 
@@ -238,12 +211,12 @@ app.get('/widget.js', (req, res) => {
 
     const button = document.createElement('button');
     button.id = 'voxio-w-btn';
-    button.innerHTML = '<div class="pulse"></div><i class="fas fa-comment-dots"></i>';
+    button.innerHTML = '<i class="fas fa-comment-dots"></i>';
     container.appendChild(button);
 
     const win = document.createElement('div');
     win.id = 'voxio-w-window';
-    win.innerHTML = '<iframe src="' + baseUrl + '/widget/' + apiKey + '" title="VOXIO Chat"></iframe><div class="vx-powered">Powered by VOXIO</div>';
+    win.innerHTML = '<iframe src="' + baseUrl + '/widget/' + apiKey + '" title="VOXIO Chat"></iframe>';
     container.appendChild(win);
 
     let isOpen = false;
@@ -255,7 +228,7 @@ app.get('/widget.js', (req, res) => {
             button.innerHTML = '<i class="fas fa-times"></i>';
         } else {
             win.classList.remove('vx-open');
-            button.innerHTML = '<div class="pulse"></div><i class="fas fa-comment-dots"></i>';
+            button.innerHTML = '<i class="fas fa-comment-dots"></i>';
             setTimeout(() => { if(!isOpen) win.style.display = 'none'; }, 400);
         }
     };
@@ -263,28 +236,23 @@ app.get('/widget.js', (req, res) => {
     res.send(widgetCode);
 });
 
+// ✅ Route to handle iframe redirect
+app.get('/widget/:apiKey', (req, res) => {
+    const frontendUrl = process.env.FRONTEND_URL || 'https://voxio-v1.vercel.app';
+    res.redirect(`${frontendUrl}/widget/${req.params.apiKey}`);
+});
+
 app.get('/api/ping', (req, res) => {
     res.json({ message: "pong" });
 });
 
-// 🩺 Health check endpoint to diagnose Vercel Environment Variables
+// 🩺 Health check
 app.get('/api/health', async (req, res) => {
     try {
-        const { db, firebaseInitError } = await import('./config/firebase.js');
-        res.json({
-            status: "ok",
-            dbInitialized: !!db,
-            firebaseError: firebaseInitError ? firebaseInitError.message || firebaseInitError.toString() : null,
-            envKeys: {
-                hasProjectId: !!process.env.FIREBASE_PROJECT_ID,
-                hasEmail: !!process.env.FIREBASE_CLIENT_EMAIL,
-                hasPrivateKey: !!process.env.FIREBASE_PRIVATE_KEY,
-                privateKeyLength: process.env.FIREBASE_PRIVATE_KEY ? process.env.FIREBASE_PRIVATE_KEY.length : 0,
-                privateKeyStartsWith: process.env.FIREBASE_PRIVATE_KEY ? process.env.FIREBASE_PRIVATE_KEY.substring(0, 30) : null
-            }
-        });
+        const { db } = await import('./config/firebase.js');
+        res.json({ status: "ok", dbInitialized: !!db });
     } catch (err) {
-        res.status(500).json({ error: err.message, stack: err.stack });
+        res.status(500).json({ error: err.message });
     }
 });
 

@@ -21,7 +21,7 @@ const WidgetCustomizer = () => {
     const iframeRef = useRef(null);
 
     const user = secureStorage.getItem('user');
-    const apiKey = user?.apiKey;
+    const apiKey = user?.apiKey || user?.chatToken || '';
 
     useEffect(() => {
         fetchCurrentConfig();
@@ -77,7 +77,10 @@ const WidgetCustomizer = () => {
         } finally { setLoading(false); setAiProcessing(false); }
     };
 
-    const previewUrl = `${BACKEND_URL.replace('/api', '')}/widget/${apiKey}?t=${Date.now()}`;
+    const currentOrigin = window.location.origin;
+    const previewUrl = apiKey 
+        ? `${BACKEND_URL.replace('/api', '')}/widget/${apiKey}?t=${Date.now()}`
+        : '';
 
     return (
         <div className="widget-customizer">
