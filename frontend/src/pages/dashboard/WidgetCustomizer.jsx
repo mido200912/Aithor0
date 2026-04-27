@@ -29,8 +29,7 @@ const WidgetCustomizer = () => {
     
     const messagesEndRef = useRef(null);
 
-    const user = secureStorage.getItem('user');
-    const apiKey = user?.apiKey || user?.chatToken || '';
+    const [apiKey, setApiKey] = useState('');
 
     useEffect(() => {
         fetchCurrentConfig();
@@ -45,11 +44,15 @@ const WidgetCustomizer = () => {
     const fetchCurrentConfig = async () => {
         try {
             const token = secureStorage.getItem('token');
-            const res = await axios.get(`${BACKEND_URL}/widget-editor/current`, {
+            // Fetch the whole company to get the API key and widget config
+            const res = await axios.get(`${BACKEND_URL}/company`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             if (res.data) {
-                setConfig({ ...defaultConfig, ...res.data });
+                setApiKey(res.data.apiKey);
+                if (res.data.widgetConfig) {
+                    setConfig({ ...defaultConfig, ...res.data.widgetConfig });
+                }
             }
             setMessages([{
                 id: 1,

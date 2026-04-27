@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
@@ -15,12 +16,28 @@ const WidgetTab = () => {
     const [copied, setCopied] = useState(false);
     const [activeTab, setActiveTab] = useState('install'); // 'install' or 'customize'
     
-    const user = secureStorage.getItem('user');
-    const apiKey = user?.apiKey || 'YOUR_API_KEY';
+    const [apiKey, setApiKey] = useState('YOUR_API_KEY');
     
     const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://aithor1.vercel.app/api';
     const CLEAN_BACKEND_URL = BACKEND_URL.replace('/api', '');
     
+    useEffect(() => {
+        const fetchApiKey = async () => {
+            try {
+                const token = secureStorage.getItem('token');
+                const res = await axios.get(`${BACKEND_URL}/company`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (res.data?.apiKey) {
+                    setApiKey(res.data.apiKey);
+                }
+            } catch (err) {
+                console.error("Failed to fetch API key:", err);
+            }
+        };
+        fetchApiKey();
+    }, []);
+
     const widgetCode = `<script 
   src="${CLEAN_BACKEND_URL}/widget.js" 
   data-api-key="${apiKey}"
