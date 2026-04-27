@@ -21,6 +21,8 @@ router.post("/edit", requireAuth, async (req, res) => {
         customCss: ""
     };
 
+    console.log("🛠️ Widget Editor: Processing request for", company.name);
+
     const systemPrompt = `You are "VOXIO Widget Architect". You specialize in designing the floating chat bubble widget.
 The user wants to modify their FLOATING CHAT WIDGET (the small bubble at the corner of their site).
 
@@ -52,24 +54,33 @@ History: ${JSON.stringify(history)}`;
         const cleaned = aiResult.replace(/```json\s*/gi, '').replace(/```\s*/gi, '');
         const startIdx = cleaned.indexOf('{');
         const endIdx = cleaned.lastIndexOf('}');
+        if (startIdx === -1 || endIdx === -1) throw new Error("Invalid AI JSON format");
+        
         parsed = JSON.parse(cleaned.substring(startIdx, endIdx + 1));
     } catch (e) {
-        return res.status(500).json({ error: "AI response error" });
+        console.error("❌ Widget Editor: AI Parse Error", e.message, aiResult);
+        return res.status(500).json({ error: "AI response error", raw: aiResult });
     }
 
-    // Save to Firestore
+    // Save using the instance .save() method
     company.widgetConfig = parsed.config;
-    await Company.collection.doc(company._id).set({ widgetConfig: parsed.config }, { merge: true });
+    await company.save();
 
+    console.log("✅ Widget Editor: Config saved successfully");
     res.json(parsed);
   } catch (err) {
+    console.error("🔥 Widget Editor Error:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
 router.get("/current", requireAuth, async (req, res) => {
-    const company = await Company.findOne({ owner: req.user._id });
-    res.json(company?.widgetConfig || { primaryColor: "#6C63FF", welcomeMessage: "Welcome!" });
+    try {
+        const company = await Company.findOne({ owner: req.user._id });
+        res.json(company?.widgetConfig || { primaryColor: "#6C63FF", welcomeMessage: "Welcome!" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 export default router;

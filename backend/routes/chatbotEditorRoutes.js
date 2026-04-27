@@ -79,15 +79,13 @@ Current User Request: ${userRequest}
 
 Remember: Modify the code to fulfill the current request while respecting the context of previous changes.`;
 
-    console.log("🤖 Chatbot Editor: Sending to AI. System:", systemPrompt.length, "User:", userPrompt.length);
+    console.log("🤖 Chatbot Editor: Sending to AI...");
     const aiResult = await fetchDesignerAiResponse(systemPrompt, userPrompt, "Failed to process request.");
-    console.log("🤖 Chatbot Editor: AI responded, length:", aiResult.length);
-
+    
     // Parse AI response JSON
     let parsed;
     try {
       let cleaned = aiResult;
-      // Strip markdown fences if present
       cleaned = cleaned.replace(/```json\s*/gi, '').replace(/```html\s*/gi, '').replace(/```\s*/gi, '');
 
       const startIdx = cleaned.indexOf('{');
@@ -106,14 +104,13 @@ Remember: Modify the code to fulfill the current request while respecting the co
       return res.status(500).json({ error: "فشل التعديل، حاول تاني" });
     }
 
-    // Save updated HTML to Firestore
+    // Save updated HTML using the instance method
     company.websiteConfig = {
       ...company.websiteConfig,
       htmlContent: parsed.code
     };
     await company.save();
 
-    console.log("🤖 Chatbot Editor: Saved. New HTML length:", parsed.code.length);
     res.json({ message: parsed.message, code: parsed.code });
   } catch (err) {
     console.error("🤖 Chatbot Editor Edit Error:", err);
@@ -139,13 +136,12 @@ router.post("/reset", requireAuth, async (req, res) => {
 
     res.json({ message: "تم إعادة التصميم للقالب الأصلي بنجاح ✅", code: defaultHtml });
   } catch (err) {
-    console.error("🤖 Chatbot Editor Reset Error:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
 /*-------------------------------
-  Public chatbot page data (NO auth)
+  Public chatbot page data
 -------------------------------*/
 router.get("/page/:slug", async (req, res) => {
   try {
@@ -162,7 +158,6 @@ router.get("/page/:slug", async (req, res) => {
       slug: company.slug
     });
   } catch (err) {
-    console.error("🤖 Chatbot Editor Page Error:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -176,13 +171,11 @@ router.post("/save", requireAuth, async (req, res) => {
     const company = await Company.findOne({ owner: req.user._id });
     if (!company) return res.status(404).json({ error: "Company not found" });
 
-    // Directly update Firestore to be safe
-    const websiteConfig = {
+    company.websiteConfig = {
       ...(company.websiteConfig || {}),
       htmlContent: htmlContent
     };
-
-    await Company.collection.doc(company._id).set({ websiteConfig }, { merge: true });
+    await company.save();
 
     res.json({ message: "تم حفظ الكود بنجاح ✅" });
   } catch (err) {

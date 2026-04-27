@@ -66,7 +66,7 @@ app.use('/api/webhooks/meta', express.raw({ type: '*/*' }));
 app.use('/api/integrations/meta/data-deletion', express.raw({ type: '*/*' }));
 
 // ✅ إعداد JSON Body
-app.use(express.json({ limit: '10kb' }));
+app.use(express.json({ limit: '2mb' }));
 app.use(hpp());
 app.use(xssClean);
 
