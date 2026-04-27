@@ -44,12 +44,15 @@ router.post("/chat", async (req, res) => {
     if ((!finalApiKey && !slug) || !prompt)
       return res.status(400).json({ success: false, error: "Missing parameters" });
 
-    // ✅ احضار الشركة بناءً على الـ chatToken أو السبيكة (Slug)
+    // ✅ احضار الشركة بناءً على الـ chatToken أو السبيكة (Slug) أو apiKey
     let company;
     if (slug) {
       company = await Company.findOne({ slug });
     } else {
       company = await Company.findOne({ chatToken: finalApiKey });
+      if (!company) {
+        company = await Company.findOne({ apiKey: finalApiKey });
+      }
     }
 
     if (!company)

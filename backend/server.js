@@ -125,7 +125,7 @@ app.get("/", (req, res) => {
 // ✅ Serve Widget JS Direct Content (Premium Redesigned Version)
 app.get('/widget.js', (req, res) => {
     res.setHeader('Content-Type', 'application/javascript');
-    const baseUrl = process.env.FRONTEND_URL || 'https://voxio-v1.vercel.app';
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const widgetCode = `
 (function() {
     const script = document.currentScript;
@@ -217,7 +217,7 @@ app.get('/widget.js', (req, res) => {
 
     const win = document.createElement('div');
     win.id = 'voxio-w-window';
-    win.innerHTML = '<iframe src="' + baseUrl + '/widget/' + apiKey + '" title="VOXIO Chat"></iframe>';
+    win.innerHTML = '<iframe src="${baseUrl}/widget/' + apiKey + '" title="VOXIO Chat"></iframe>';
     container.appendChild(win);
 
     let isOpen = false;
@@ -239,7 +239,7 @@ app.get('/widget.js', (req, res) => {
 
 // ✅ Route to handle iframe redirect
 app.get('/widget/:apiKey', (req, res) => {
-    const frontendUrl = process.env.FRONTEND_URL || 'https://voxio-v1.vercel.app';
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     res.redirect(`${frontendUrl}/widget/${req.params.apiKey}`);
 });
 

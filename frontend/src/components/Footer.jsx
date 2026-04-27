@@ -22,7 +22,7 @@ const Footer = () => {
                         <ul>
                             <li><a href="/#home">{t.nav.home}</a></li>
                             <li><a href="/#features">{t.nav.features}</a></li>
-                            <li><a href="/#pricing">{t.nav.pricing}</a></li>
+                            <li><a href="/#integrations">{t.nav.integrations}</a></li>
                             <li><a href="/#contact">{t.nav.contact}</a></li>
                         </ul>
                     </div>

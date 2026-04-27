@@ -94,18 +94,7 @@ const Navbar = () => {
                             {t.nav.integrations}
                         </a>
                     </li>
-                    <li>
-                        <a
-                            href="#pricing"
-                            className={`nav-link ${activeLink === 'pricing' ? 'active' : ''}`}
-                            onClick={(e) => {
-                                e.preventDefault();
-                                scrollToSection('pricing');
-                            }}
-                        >
-                            {t.nav.pricing}
-                        </a>
-                    </li>
+
                     <li>
                         <a
                             href="#contact"

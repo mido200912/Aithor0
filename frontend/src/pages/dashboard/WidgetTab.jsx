@@ -17,12 +17,13 @@ const WidgetTab = () => {
     const [activeTab, setActiveTab] = useState('install'); // 'install' or 'customize'
     
     const [apiKey, setApiKey] = useState('YOUR_API_KEY');
+    const [config, setConfig] = useState({});
     
     const BACKEND_URL = import.meta.env.VITE_API_URL || 'https://aithor1.vercel.app/api';
     const CLEAN_BACKEND_URL = BACKEND_URL.replace('/api', '');
     
     useEffect(() => {
-        const fetchApiKey = async () => {
+        const fetchData = async () => {
             try {
                 const token = secureStorage.getItem('token');
                 const res = await axios.get(`${BACKEND_URL}/company`, {
@@ -31,17 +32,22 @@ const WidgetTab = () => {
                 if (res.data?.apiKey) {
                     setApiKey(res.data.apiKey);
                 }
+                if (res.data?.widgetConfig) {
+                    setConfig(res.data.widgetConfig);
+                }
             } catch (err) {
                 console.error("Failed to fetch API key:", err);
             }
         };
-        fetchApiKey();
+        fetchData();
     }, []);
 
     const widgetCode = `<script 
   src="${CLEAN_BACKEND_URL}/widget.js" 
   data-api-key="${apiKey}"
-></script>`;
+  data-primary-color="${config?.primaryColor || '#6C63FF'}"
+  data-launcher-color="${config?.launcherColor || '#1e293b'}">
+</script>`;
 
     const copyToClipboard = () => {
         navigator.clipboard.writeText(widgetCode);

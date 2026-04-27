@@ -2,35 +2,35 @@ import { useLanguage } from '../context/LanguageContext';
 import './Integrations.css';
 
 const Integrations = () => {
-    const { t } = useLanguage();
+    const { t, language } = useLanguage();
 
     const integrations = [
         {
-            name: 'Facebook Messenger',
-            description: t.integrations.messengerDesc,
-            icon: 'fa-facebook-f',
-            status: t.integrations.soon,
-            className: 'facebook',
-            available: false
+            name: 'WhatsApp Business',
+            description: language === 'ar' ? 'تواصل مع عملائك مباشرة عبر التطبيق الأكثر استخداماً في العالم.' : 'Connect with your customers directly via the world\'s most used app.',
+            icon: 'fa-whatsapp',
+            status: language === 'ar' ? 'متاح الآن' : 'Available Now',
+            className: 'whatsapp',
+            available: true
         },
         {
             name: 'Instagram DMs',
-            description: t.integrations.instagramDesc,
+            description: language === 'ar' ? 'رد تلقائياً على رسائل الدايركت وحول متابعيك إلى عملاء دائمين.' : 'Auto-reply to DMs and turn your followers into loyal customers.',
             icon: 'fa-instagram',
-            status: t.integrations.soon,
+            status: language === 'ar' ? 'متاح الآن' : 'Available Now',
             className: 'instagram',
-            available: false
+            available: true
         },
         {
-            name: 'WhatsApp Business',
-            description: t.integrations.whatsappDesc,
-            icon: 'fa-whatsapp',
-            status: t.integrations.soon,
-            className: 'whatsapp',
-            available: false
+            name: 'Telegram Bot',
+            description: language === 'ar' ? 'قم ببناء بوتات ذكية وسريعة لخدمة عملائك على مدار الساعة.' : 'Build smart and fast bots to serve your customers 24/7.',
+            icon: 'fa-telegram',
+            status: language === 'ar' ? 'متاح الآن' : 'Available Now',
+            className: 'telegram',
+            available: true
         },
         {
-            name: 'Shopify',
+            name: 'Shopify Store',
             description: t.integrations.shopifyDesc,
             icon: 'fa-shopify',
             status: t.integrations.soon,
@@ -38,16 +38,8 @@ const Integrations = () => {
             available: false
         },
         {
-            name: 'Telegram',
-            description: t.integrations.soon,
-            icon: 'fa-telegram',
-            status: t.integrations.soon,
-            className: 'telegram',
-            available: false
-        },
-        {
             name: 'Twitter (X)',
-            description: t.integrations.soon,
+            description: language === 'ar' ? 'قريباً: إدارة الردود والرسائل الخاصة عبر منصة X.' : 'Coming soon: Manage replies and DMs via X platform.',
             icon: 'fa-twitter',
             status: t.integrations.soon,
             className: 'twitter',
@@ -72,14 +64,14 @@ const Integrations = () => {
                     {integrations.map((integration, index) => (
                         <div
                             key={index}
-                            className={`integration-card ${!integration.available ? 'coming-soon' : ''}`}
+                            className={`integration-card ${!integration.available ? 'coming-soon' : 'active-card'}`}
                         >
                             <div className={`integration-logo ${integration.className}`}>
                                 <i className={`fab ${integration.icon}`}></i>
                             </div>
                             <h3>{integration.name}</h3>
                             <p>{integration.description}</p>
-                            <span className={`integration-status ${!integration.available ? 'upcoming' : ''}`}>
+                            <span className={`integration-status ${integration.available ? 'status-active' : 'upcoming'}`}>
                                 {integration.status}
                             </span>
                         </div>

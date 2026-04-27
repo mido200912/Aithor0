@@ -36,16 +36,20 @@ export function extractCorexReply(data, fallback = "لم أتمكن من الر�
 export async function fetchAiResponse(fullQuestion, fallbackText = "لم أتمكن من الرد حالياً.") {
     let reply = null;
 
-    // ✂️ Truncate question for GET requests to avoid 414 URL Too Long error
-    // Increased limit for website editor prompts that include full HTML/CSS
-    const truncatedQuestion = fullQuestion.length > 15000 ? fullQuestion.substring(0, 15000) + "..." : fullQuestion;
+    // ✅ Use POST to avoid 414 URI Too Long errors — no truncation needed
+    const truncatedQuestion = fullQuestion.length > 12000 ? fullQuestion.substring(0, 12000) + "..." : fullQuestion;
 
     try {
         const apiUrl = process.env.COREX_API_URL || "https://dev-c7z.pantheonsite.io/CoreSys/chat.php";
         const aiApiKey = process.env.COREX_API_KEY || "VOXIOV1_6F85B401ED";
-        const requestUrl = `${apiUrl}?key=${aiApiKey}&act=assistant&a=${encodeURIComponent(truncatedQuestion)}`;
 
-        const aiResponse = await axios.get(requestUrl, { timeout: 60000 });
+        const aiResponse = await axios.post(apiUrl, 
+            new URLSearchParams({ key: aiApiKey, act: 'assistant', a: truncatedQuestion }).toString(),
+            { 
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                timeout: 60000 
+            }
+        );
         reply = extractCorexReply(aiResponse.data, null);
 
         if (reply && typeof reply === 'string' && (reply.includes('daily limit') || reply.includes('{"success":false'))) {
@@ -63,7 +67,8 @@ export async function fetchAiResponse(fullQuestion, fallbackText = "لم أتم�
             try {
                 const fallbackResponse = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
                     model: "google/gemini-2.0-flash-001", 
-                    messages: [{ role: "user", content: fullQuestion }]
+                    messages: [{ role: "user", content: truncatedQuestion }],
+                    max_tokens: 2000
                 }, {
                     headers: {
                         "Authorization": `Bearer ${openRouterApiKey}`,

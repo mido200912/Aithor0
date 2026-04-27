@@ -5,12 +5,11 @@ import { useLanguage } from '../../context/LanguageContext';
 import { secureStorage } from '../../utils/secureStorage';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '../../components/Toast';
+import { Link } from 'react-router-dom';
 import './Integrations.css';
 
-
-
 const Integrations = () => {
-    const { t } = useLanguage();
+    const { t, language } = useLanguage();
     const [integrations, setIntegrations] = useState([]);
     const [loading, setLoading] = useState(true);
     const { toast } = useToast();
@@ -445,7 +444,6 @@ const Integrations = () => {
     return (
         <div className="integrations-page animate-fade-in">
             {/* Toast Notification */}
-            <Toast toast={toast} onClose={() => setToast(null)} />
             <motion.h1
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
