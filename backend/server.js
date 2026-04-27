@@ -18,6 +18,8 @@ import integrationManagerRoutes from "./routes/integrationManagerRoutes.js";
 import voxioChatRoutes from "./routes/VOXIOChatRoutes.js";
 import chatbotEditorRoutes from "./routes/chatbotEditorRoutes.js";
 import widgetEditorRoutes from "./routes/widgetEditorRoutes.js";
+import supportRoutes from "./routes/supportRoutes.js";
+import broadcastRoutes from "./routes/broadcastRoutes.js";
 
 const app = express();
 
@@ -115,6 +117,8 @@ app.use("/api/support-chat", chatHistoryRoutes);
 app.use("/api/integration-manager", integrationManagerRoutes);
 app.use("/api/voxio-chat", voxioChatRoutes);
 app.use("/api/chatbot-editor", chatbotEditorRoutes);
+app.use("/api/support", supportRoutes);
+app.use("/api/broadcast", broadcastRoutes);
 app.use("/api/widget-editor", widgetEditorRoutes);
 
 // ✅ Route افتراضي

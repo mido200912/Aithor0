@@ -110,6 +110,7 @@ const Hero = () => {
                         )}
                     </div>
 
+                    {/* 
                     <div className="hero-stats animate-fade-in delay-3" ref={statsRef}>
                         <div className="stat-item">
                             <div className="stat-value">
@@ -135,6 +136,7 @@ const Hero = () => {
                             <span className="stat-label">{t.hero.statSatisfaction}</span>
                         </div>
                     </div>
+                    */}
                 </div>
 
                 <div className="hero-visual">

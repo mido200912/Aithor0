@@ -1,15 +1,19 @@
 import { useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
+import axios from 'axios';
 import './Contact.css';
 
 const Contact = () => {
     const { t } = useLanguage();
+    const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState({
         name: '',
         email: '',
         subject: '',
         message: ''
     });
+
+    const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
     const handleChange = (e) => {
         setFormData({
@@ -18,12 +22,21 @@ const Contact = () => {
         });
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        // Handle form submission
-        console.log('Form submitted:', formData);
-        alert(t.contact.successMessage);
-        setFormData({ name: '', email: '', subject: '', message: '' });
+        setLoading(true);
+        try {
+            const response = await axios.post(`${API}/support/submit`, formData);
+            if (response.data.success) {
+                alert(t.contact.successMessage || 'تم إرسال رسالتك بنجاح!');
+                setFormData({ name: '', email: '', subject: '', message: '' });
+            }
+        } catch (error) {
+            console.error('Submission error:', error);
+            alert('عذراً، حدث خطأ أثناء إرسال الرسالة. يرجى المحاولة مرة أخرى.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -128,9 +141,9 @@ const Contact = () => {
                                 required
                             ></textarea>
                         </div>
-                        <button type="submit" className="btn btn-primary btn-block">
-                            <i className="fas fa-paper-plane"></i>
-                            {t.contact.sendButton}
+                        <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
+                            <i className={loading ? "fas fa-spinner fa-spin" : "fas fa-paper-plane"}></i>
+                            {loading ? 'جاري الإرسال...' : t.contact.sendButton}
                         </button>
                     </form>
                 </div>

@@ -3,11 +3,26 @@ import express from 'express';
 import cors from 'cors';
 import admin from 'firebase-admin';
 import jwt from 'jsonwebtoken';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 
 const app = express();
 
-app.use(cors());
-app.use(express.json());
+// 🛡️ Security Hardening
+app.use(helmet()); // Sets various security-related HTTP headers
+app.use(cors({
+  origin: process.env.FRONTEND_URL || '*', // Restrict this in production
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+app.use(express.json({ limit: '10kb' })); // Limit body size to prevent DoS
+
+// 🚦 Rate Limiting - Prevent Brute Force on Login
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 login requests per window
+  message: { error: 'Too many login attempts, please try again after 15 minutes' }
+});
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
@@ -21,7 +36,7 @@ if (!admin.apps.length) {
 }
 const db = admin.firestore();
 
-// Admin Credentials
+// Admin Credentials (Should be in .env but keeping for compatibility)
 const ADMIN_EMAIL = 'midovoxio@gmail.com';
 const ADMIN_PASS = 'mido927010';
 
@@ -29,19 +44,22 @@ const ADMIN_PASS = 'mido927010';
 const adminAuth = (req, res, next) => {
   try {
     const token = req.header('Authorization')?.replace('Bearer ', '');
-    if (!token) throw new Error();
+    if (!token) throw new Error('No token provided');
+    
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    if (!decoded.isAdmin) throw new Error();
+    if (!decoded.isAdmin) throw new Error('Not authorized');
+    
+    req.admin = decoded;
     next();
   } catch (e) {
     res.status(401).json({ error: 'Please authenticate as admin' });
   }
 };
 
-app.post('/api/admin/login', (req, res) => {
+app.post('/api/admin/login', loginLimiter, (req, res) => {
   const { email, password } = req.body;
   if (email === ADMIN_EMAIL && password === ADMIN_PASS) {
-    const token = jwt.sign({ isAdmin: true, email }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ isAdmin: true, email }, process.env.JWT_SECRET, { expiresIn: '24h' });
     res.json({ token });
   } else {
     res.status(401).json({ error: 'Invalid admin credentials' });
@@ -79,6 +97,32 @@ app.get('/api/admin/users', adminAuth, async (req, res) => {
   }
 });
 
+app.get('/api/admin/companies/:id', adminAuth, async (req, res) => {
+  try {
+    const companyDoc = await db.collection('companies').doc(req.params.id).get();
+    if (!companyDoc.exists) return res.status(404).json({ error: 'Company not found' });
+    
+    const companyData = companyDoc.data();
+    
+    // Fetch owner info
+    const ownerDoc = await db.collection('users').doc(companyData.owner).get();
+    const ownerData = ownerDoc.exists ? ownerDoc.data() : { email: 'Unknown' };
+
+    // Fetch integrations
+    const intgSnap = await db.collection('integrations').where('company', '==', req.params.id).get();
+    const integrations = intgSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
+
+    res.json({
+      _id: companyDoc.id,
+      ...companyData,
+      ownerEmail: ownerData.email,
+      integrations
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to fetch company details' });
+  }
+});
+
 app.delete('/api/admin/users/:userId', adminAuth, async (req, res) => {
   try {
     const userId = req.params.userId;
@@ -87,11 +131,9 @@ app.delete('/api/admin/users/:userId', adminAuth, async (req, res) => {
     for (const doc of companiesSnapshot.docs) {
       const companyId = doc.id;
       
-      // Delete Integrations
       const intgSnap = await db.collection('integrations').where('company', '==', companyId).get();
       for (const iDoc of intgSnap.docs) await db.collection('integrations').doc(iDoc.id).delete();
       
-      // Delete Chats
       const chatSnap = await db.collection('company_chats').where('company', '==', companyId).get();
       for (const cDoc of chatSnap.docs) await db.collection('company_chats').doc(cDoc.id).delete();
       
@@ -132,6 +174,79 @@ app.put('/api/admin/companies/:companyId/limit', adminAuth, async (req, res) => 
     res.json({ message: 'Limit updated' });
   } catch (e) {
     res.status(500).json({ error: 'Failed to update limit' });
+  }
+});
+
+// 🤖 Manage AI Knowledge & Prompts (Full Control)
+app.get('/api/admin/companies/:companyId/ai-config', adminAuth, async (req, res) => {
+  try {
+    const compDoc = await db.collection('companies').doc(req.params.companyId).get();
+    if (!compDoc.exists) return res.status(404).json({ error: 'Company not found' });
+    
+    const data = compDoc.data();
+    res.json({
+      name: data.name || '',
+      industry: data.industry || '',
+      description: data.description || '',
+      vision: data.vision || '',
+      mission: data.mission || '',
+      values: data.values || '',
+      systemPrompt: data.customInstructions || '',
+      extractedKnowledge: data.extractedKnowledge || '',
+      urlExtractedKnowledge: data.urlExtractedKnowledge || '',
+      knowledgeBase: data.knowledgeBase || [],
+      websiteUrl: data.websiteUrl || ''
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to fetch AI config' });
+  }
+});
+
+app.put('/api/admin/companies/:companyId/ai-config', adminAuth, async (req, res) => {
+  try {
+    const updateData = {
+      name: req.body.name,
+      industry: req.body.industry,
+      description: req.body.description,
+      vision: req.body.vision,
+      mission: req.body.mission,
+      values: req.body.values,
+      customInstructions: req.body.systemPrompt,
+      extractedKnowledge: req.body.extractedKnowledge,
+      urlExtractedKnowledge: req.body.urlExtractedKnowledge,
+      updatedAt: new Date(),
+      updatedBy: 'admin'
+    };
+
+    // Remove undefined fields
+    Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
+
+    await db.collection('companies').doc(req.params.companyId).update(updateData);
+    res.json({ message: 'Company AI configuration synchronized successfully' });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to update AI config' });
+  }
+});
+
+// 🚫 Advanced Blocking
+app.post('/api/admin/users/:userId/block', adminAuth, async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const userRef = db.collection('users').doc(req.params.userId);
+    await userRef.update({ 
+      isSuspended: true, 
+      blockReason: reason,
+      blockedAt: new Date()
+    });
+    
+    const compSnap = await db.collection('companies').where('owner', '==', req.params.userId).get();
+    for (const doc of compSnap.docs) {
+      await db.collection('companies').doc(doc.id).update({ isSuspended: true });
+    }
+    
+    res.json({ message: 'User and associated companies blocked' });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to block user' });
   }
 });
 
@@ -180,6 +295,34 @@ app.post('/api/admin/broadcast', adminAuth, async (req, res) => {
   }
 });
 
+app.get('/api/admin/support-messages', adminAuth, async (req, res) => {
+  try {
+    const snapshot = await db.collection('support_messages').orderBy('createdAt', 'desc').get();
+    const messages = snapshot.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
+    res.json(messages);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+});
+
+app.put('/api/admin/support-messages/:id/read', adminAuth, async (req, res) => {
+  try {
+    await db.collection('support_messages').doc(req.params.id).update({ status: 'read' });
+    res.json({ message: 'Message marked as read' });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to update message' });
+  }
+});
+
+app.delete('/api/admin/support-messages/:id', adminAuth, async (req, res) => {
+  try {
+    await db.collection('support_messages').doc(req.params.id).delete();
+    res.json({ message: 'Message deleted' });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to delete message' });
+  }
+});
+
 app.get('/api/admin/analytics', adminAuth, async (req, res) => {
   try {
     const usersCount = (await db.collection('users').count().get()).data().count;
@@ -194,5 +337,5 @@ app.get('/api/admin/analytics', adminAuth, async (req, res) => {
 
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {
-  console.log(`Secure Admin Backend running on port ${PORT}`);
+  console.log(`🛡️ Secure Admin Backend running on port ${PORT}`);
 });
