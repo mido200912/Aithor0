@@ -19,6 +19,9 @@ const WhatsappBulk = () => {
     const [currentIndex, setCurrentIndex] = useState(-1);
     const [countdown, setCountdown] = useState(0);
     const [results, setResults] = useState([]);
+    const [useTemplate, setUseTemplate] = useState(false);
+    const [templateName, setTemplateName] = useState('hello_world');
+    const [templateLang, setTemplateLang] = useState('en_US');
     const cancelRef = useRef(false);
 
     const parsedNumbers = useMemo(() => {
@@ -74,11 +77,21 @@ const WhatsappBulk = () => {
             setResults(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'sending' } : r));
 
             try {
-                await axios.post(`${BACKEND_URL}/handoff/reply`, {
+                const payload = {
                     userId: parsedNumbers[i],
                     platform: 'whatsapp',
-                    message: message.trim()
-                }, {
+                    message: message.trim(),
+                };
+                if (useTemplate) {
+                    payload.useTemplate = true;
+                    payload.templateName = templateName.trim() || 'hello_world';
+                    payload.templateLanguage = templateLang.trim() || 'en_US';
+                    // hello_world doesn't need params, custom templates with {{1}} will use message as param
+                    if (payload.templateName !== 'hello_world') {
+                        payload.templateParams = [message.trim()];
+                    }
+                }
+                await axios.post(`${BACKEND_URL}/handoff/reply`, payload, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 setResults(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'sent' } : r));
@@ -303,6 +316,94 @@ const WhatsappBulk = () => {
                             <span style={{ opacity: 0.6 }}>•</span>
                             <span>{isArabic ? 'استخدم سطر جديد للفقرات' : 'Use new lines for paragraphs'}</span>
                         </div>
+                    </div>
+
+                    {/* ── Cold numbers policy explain + Template Mode ── */}
+                    <div className="dash-card" style={{ padding: '16px', borderRadius: '16px', border: useTemplate ? '1px solid #f59e0b' : '1px solid var(--dash-border)', background: useTemplate ? 'linear-gradient(135deg,#fffbeb,#fef3c7)' : 'var(--dash-card)', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
+                        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', flexWrap:'wrap', marginBottom: useTemplate ? '14px' : 0 }}>
+                            <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
+                                <span style={{ width:'36px', height:'36px', borderRadius:'10px', background: useTemplate ? '#f59e0b' : '#e5e7eb', color: useTemplate ? 'white' : '#6b7280', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                                    <i className={useTemplate ? 'fas fa-file-contract' : 'fas fa-info-circle'} />
+                                </span>
+                                <div>
+                                    <div style={{ fontWeight:900, fontSize:'0.9rem', color: useTemplate ? '#92400e' : 'var(--dash-text)' }}>
+                                        {isArabic ? 'وضع القالب للأرقام الجديدة' : 'Template mode for cold numbers'}
+                                    </div>
+                                    <div style={{ fontSize:'0.75rem', color: 'var(--dash-text-sec)', fontWeight:600 }}>
+                                        {isArabic ? 'فعّله إذا كنت ترسل لأرقام لم تراسلك من قبل' : 'Enable if sending to numbers that never messaged you'}
+                                    </div>
+                                </div>
+                            </div>
+                            <label style={{ display:'flex', alignItems:'center', gap:'8px', cursor:'pointer', userSelect:'none' }}>
+                                <span style={{ fontSize:'0.78rem', fontWeight:800, color: useTemplate ? '#92400e' : 'var(--dash-text-sec)' }}>{useTemplate ? (isArabic?'مفعّل':'ON') : (isArabic?'متوقف':'OFF')}</span>
+                                <div
+                                    onClick={()=> !isSending && setUseTemplate(v=>!v)}
+                                    style={{
+                                        width:'52px', height:'30px', borderRadius:'20px', padding:'3px',
+                                        background: useTemplate ? '#f59e0b' : '#e5e7eb', border:`1px solid ${useTemplate?'#f59e0b':'#d1d5db'}`,
+                                        display:'flex', alignItems:'center', justifyContent: useTemplate ? 'flex-end':'flex-start',
+                                        cursor: isSending?'not-allowed':'pointer', transition:'all 0.25s', opacity: isSending?0.6:1
+                                    }}
+                                >
+                                    <div style={{ width:'22px', height:'22px', borderRadius:'50%', background:'white', boxShadow:'0 2px 6px rgba(0,0,0,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.6rem', color: useTemplate ? '#f59e0b':'#9ca3af' }}>
+                                        <i className={useTemplate ? 'fas fa-check':'fas fa-times'} />
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+
+                        {useTemplate && (
+                            <div style={{ display:'flex', flexDirection:'column', gap:'12px', animation:'fadeIn 0.25s' }}>
+                                <div style={{ background:'rgba(255,255,255,0.7)', border:'1px solid #fde68a', borderRadius:'12px', padding:'10px 12px', fontSize:'0.78rem', color:'#78350f', lineHeight:1.6 }}>
+                                    <i className="fas fa-lightbulb" style={{ color:'#f59e0b', marginInlineEnd:'6px' }} />
+                                    {isArabic
+                                        ? 'واتساب يسمح بالنص الحر فقط خلال 24 ساعة من آخر رسالة للعميل. للأرقام الباردة يجب استخدام قالب موافق عليه في Meta Business Manager.'
+                                        : 'WhatsApp only allows free text within 24h of the customer\'s last message. For cold numbers you must use an approved Template.'}
+                                </div>
+                                <div style={{ display:'grid', gridTemplateColumns:'1fr 140px', gap:'10px' }}>
+                                    <div className="dash-input-group" style={{ margin:0 }}>
+                                        <label className="dash-label" style={{ fontSize:'0.75rem' }}>{isArabic?'اسم القالب':'Template name'} <span style={{ color:'#9ca3af', fontWeight:500 }}>— hello_world {isArabic?'افتراضي':'default'}</span></label>
+                                        <input
+                                            className="dash-input"
+                                            placeholder="hello_world"
+                                            value={templateName}
+                                            onChange={e=>setTemplateName(e.target.value)}
+                                            disabled={isSending}
+                                            style={{ fontSize:'0.85rem' }}
+                                        />
+                                    </div>
+                                    <div className="dash-input-group" style={{ margin:0 }}>
+                                        <label className="dash-label" style={{ fontSize:'0.75rem' }}>{isArabic?'اللغة':'Language'}</label>
+                                        <input
+                                            className="dash-input"
+                                            placeholder="en_US"
+                                            value={templateLang}
+                                            onChange={e=>setTemplateLang(e.target.value)}
+                                            disabled={isSending}
+                                            style={{ fontSize:'0.85rem' }}
+                                        />
+                                    </div>
+                                </div>
+                                <div style={{ fontSize:'0.72rem', color:'#92400e', background:'white', border:'1px solid #fde68a', borderRadius:'10px', padding:'8px 10px', lineHeight:1.5 }}>
+                                    {isArabic ? (
+                                        <><strong>كيف تنشئ قالب؟</strong> اذهب إلى <em>Meta Business Manager → WhatsApp Manager → Message Templates → Create</em> واختر <code style={{ background:'#fffbeb', padding:'2px 6px', borderRadius:'6px', border:'1px solid #fde68a' }}>{'{{1}}'}</code> كمتغير للرسالة، انتظر الموافقة (ساعة-يوم)، ثم ضع اسمه هنا. مثال: قالب <code>bulk_offer</code> بمحتوى <code>{"مرحباً {{1}}"}</code> سيُرسل نصك كمتغير.</>
+                                    ) : (
+                                        <><strong>How to create?</strong> Go to <em>Meta Business Manager → WhatsApp Manager → Message Templates → Create</em> with <code style={{ background:'#fffbeb', padding:'2px 6px', borderRadius:'6px', border:'1px solid #fde68a' }}>{'{{1}}'}</code> variable, await approval, then enter its name here.</>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {!useTemplate && (
+                            <div style={{ marginTop:'10px', background:'#fef2f2', border:'1px solid #fecaca', borderRadius:'10px', padding:'8px 10px', fontSize:'0.75rem', color:'#991b1b', display:'flex', gap:'8px', alignItems:'center' }}>
+                                <i className="fas fa-exclamation-triangle" style={{ flexShrink:0 }} />
+                                <span>
+                                    {isArabic
+                                        ? 'إذا أرسلت لأرقام لم تراسلك من قبل بدون تفعيل القالب، ستفشل الرسالة بخطأ "خارج نافذة 24 ساعة (131047)" — وهذا من سياسة واتساب الرسمية وليس خلل في النظام.'
+                                        : 'Sending to cold numbers without Template will fail with "outside 24h window (131047)" — this is official WhatsApp policy, not a system bug.'}
+                                </span>
+                            </div>
+                        )}
                     </div>
 
                     {/* Action bar */}

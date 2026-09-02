@@ -92,10 +92,11 @@ router.post("/reply", requireAuth, async (req, res) => {
     const company = await Company.findOne({ owner: req.user._id });
     if (!company) return res.status(404).json({ error: "Company not found" });
 
-    const { userId, platform, message } = req.body;
+    const { userId, platform, message, templateName, templateLanguage, templateParams, useTemplate } = req.body;
     if (!userId || !platform || !message) {
       return res.status(400).json({ error: "userId, platform, and message are required" });
     }
+    const shouldUseTemplate = !!useTemplate || !!templateName;
 
     // Save the reply to chat history
     await CompanyChat.create({
@@ -127,8 +128,34 @@ router.post("/reply", requireAuth, async (req, res) => {
     } else if (platform === "whatsapp" && integration?.credentials) {
       const { phoneNumberId, accessToken } = integration.credentials;
       if (phoneNumberId && accessToken) {
-        try {
-          await axios.post(
+        // Helper to send via Template
+        const sendTemplate = async (tName, tLang, params) => {
+          const payload = {
+            messaging_product: "whatsapp",
+            to: String(userId).replace(/[^0-9]/g, ''),
+            type: "template",
+            template: {
+              name: tName,
+              language: { code: tLang || 'en_US' },
+            },
+          };
+          if (params && Array.isArray(params) && params.length > 0) {
+            payload.template.components = [
+              {
+                type: "body",
+                parameters: params.map(p => ({ type: "text", text: String(p).substring(0, 1024) })),
+              },
+            ];
+          }
+          return axios.post(
+            `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
+            payload,
+            { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } }
+          );
+        };
+
+        const sendText = async () => {
+          return axios.post(
             `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
             {
               messaging_product: "whatsapp",
@@ -136,27 +163,70 @@ router.post("/reply", requireAuth, async (req, res) => {
               type: "text",
               text: { body: message },
             },
-            {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                "Content-Type": "application/json",
-              },
-            }
+            { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } }
           );
-        } catch (waErr) {
-          const metaErr = waErr.response?.data?.error || waErr.response?.data || waErr.message;
-          console.error("[Handoff Reply] WhatsApp send failed:", JSON.stringify(metaErr, null, 2));
-          // Mark last agent message as failed but don't throw away the chat — frontend will see detailed error
+        };
+
+        if (shouldUseTemplate) {
+          // Explicit template mode — used for cold numbers / bulk
+          const tName = templateName || integration.settings?.bulkTemplateName || 'hello_world';
+          const tLang = templateLanguage || integration.settings?.bulkTemplateLang || 'en_US';
+          const params = templateParams && Array.isArray(templateParams) ? templateParams : (tName !== 'hello_world' ? [message] : []);
           try {
-            const lastAgent = await CompanyChat.Model.findOne({ company: company._id, user: userId, platform }).sort({ createdAt: -1 });
-            if (lastAgent) await CompanyChat.Model.updateOne({ _id: lastAgent._id }, { $set: { status: 'failed', metaError: JSON.stringify(metaErr).substring(0, 500) } });
-          } catch (_) {}
-          // If Meta says outside 24h window, give actionable message
-          const msg = metaErr?.message || String(metaErr);
-          if (msg.includes('24') || msg.includes('131047') || msg.includes('template')) {
-            throw new Error(`واتساب رفض الإرسال: الرقم خارج نافذة 24 ساعة. يجب أن يراسلك العميل أولاً أو استخدم رسالة Template. التفاصيل: ${msg}`);
+            await sendTemplate(tName, tLang, params);
+            // Update last chat text to indicate template was used
+            try {
+              const lastAgent = await CompanyChat.Model.findOne({ company: company._id, user: userId, platform }).sort({ createdAt: -1 });
+              if (lastAgent) await CompanyChat.Model.updateOne({ _id: lastAgent._id }, { $set: { status: 'delivered', templateUsed: tName } });
+            } catch (_) {}
+          } catch (waErr) {
+            const metaErr = waErr.response?.data?.error || waErr.response?.data || waErr.message;
+            console.error("[Handoff Reply] WhatsApp TEMPLATE send failed:", JSON.stringify(metaErr, null, 2));
+            try {
+              const lastAgent = await CompanyChat.Model.findOne({ company: company._id, user: userId, platform }).sort({ createdAt: -1 });
+              if (lastAgent) await CompanyChat.Model.updateOne({ _id: lastAgent._id }, { $set: { status: 'failed', metaError: JSON.stringify(metaErr).substring(0, 500) } });
+            } catch (_) {}
+            const msg = metaErr?.message || String(metaErr);
+            throw new Error(`فشل إرسال القالب "${tName}": ${msg}. تأكد أن القالب موافق عليه في Meta Business Manager وأن اللغة صحيحة.`);
           }
-          throw new Error(`فشل إرسال واتساب: ${msg}`);
+        } else {
+          // Normal text mode — try text, fallback to template if outside 24h window
+          try {
+            await sendText();
+          } catch (waErr) {
+            const metaErr = waErr.response?.data?.error || waErr.response?.data || waErr.message;
+            const code = metaErr?.code;
+            const subcode = metaErr?.error_subcode;
+            const msg = metaErr?.message || String(metaErr);
+            const isOutsideWindow = code === 131047 || subcode === 131047 || msg.includes('24') || msg.toLowerCase().includes('outside') || msg.includes('131047') || msg.toLowerCase().includes('template');
+            console.error("[Handoff Reply] WhatsApp send failed:", JSON.stringify(metaErr, null, 2));
+            try {
+              const lastAgent = await CompanyChat.Model.findOne({ company: company._id, user: userId, platform }).sort({ createdAt: -1 });
+              if (lastAgent) await CompanyChat.Model.updateOne({ _id: lastAgent._id }, { $set: { status: 'failed', metaError: JSON.stringify(metaErr).substring(0, 500) } });
+            } catch (_) {}
+
+            if (isOutsideWindow) {
+              // Try automatic template fallback if a bulk template is configured
+              const fallbackTemplate = integration.settings?.bulkTemplateName;
+              if (fallbackTemplate) {
+                const fallbackLang = integration.settings?.bulkTemplateLang || 'ar';
+                console.log(`[Handoff Reply] Attempting template fallback "${fallbackTemplate}" for ${userId}`);
+                try {
+                  await sendTemplate(fallbackTemplate, fallbackLang, [message]);
+                  try {
+                    const lastAgent = await CompanyChat.Model.findOne({ company: company._id, user: userId, platform }).sort({ createdAt: -1 });
+                    if (lastAgent) await CompanyChat.Model.updateOne({ _id: lastAgent._id }, { $set: { status: 'delivered', templateUsed: fallbackTemplate } });
+                  } catch (_) {}
+                  return res.json({ success: true, message: "تم الإرسال كقالب (خارج نافذة 24 ساعة)", templateUsed: fallbackTemplate, warning: `أُرسل كقالب "${fallbackTemplate}" لأن الرقم لم يراسلك خلال 24 ساعة` });
+                } catch (fallbackErr) {
+                  const fMeta = fallbackErr.response?.data?.error || fallbackErr.response?.data || fallbackErr.message;
+                  throw new Error(`واتساب رفض الإرسال النصي وخارج نافذة 24 ساعة. حاولنا القالب "${fallbackTemplate}" وفشل: ${fMeta?.message || fMeta}. الحل: أنشئ قالب موافق عليه في Meta Business Manager باسم "${fallbackTemplate}" أو اجعل العميل يراسلك أولاً. التفاصيل: ${msg}`);
+                }
+              }
+              throw new Error(`واتساب رفض الإرسال: الرقم ${userId} خارج نافذة 24 ساعة ولم يراسلك من قبل. واتساب يسمح بالنص الحر فقط خلال 24 ساعة من آخر رسالة للعميل. الحل: 1) استخدم رسالة Template موافق عليها في Meta، أو 2) اطلب من العميل أن يراسلك أولاً، أو 3) فعّل "وضع القالب" في الإرسال الجماعي وحدد اسم قالبك. التفاصيل: ${msg}`);
+            }
+            throw new Error(`فشل إرسال واتساب: ${msg}`);
+          }
         }
       } else {
         console.warn("[Handoff Reply] Missing WhatsApp credentials for company", company._id);
