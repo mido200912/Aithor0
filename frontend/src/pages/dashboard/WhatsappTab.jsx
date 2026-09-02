@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { Link } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { secureStorage } from '../../utils/secureStorage';
 import { motion, AnimatePresence } from 'framer-motion';  
@@ -33,12 +34,115 @@ const WhatsappTab = () => {
     const [loading, setLoading] = useState(true);
     const [chatsLoading, setChatsLoading] = useState(false);
     const [saveLoading, setSaveLoading] = useState(false);
+    const [aiEnabled, setAiEnabled] = useState(true);
+    const [aiToggleLoading, setAiToggleLoading] = useState(false);
+    const [aiStatusLoaded, setAiStatusLoaded] = useState(false);
+    const [replyText, setReplyText] = useState('');
+    const [sendingReply, setSendingReply] = useState(false);
+    const [replyError, setReplyError] = useState('');
+    const [newChatNumber, setNewChatNumber] = useState('');
+    const [newChatMessage, setNewChatMessage] = useState('');
+    const [sendingNewChat, setSendingNewChat] = useState(false);
+    const [showNewChat, setShowNewChat] = useState(false);
+    const [newChatError, setNewChatError] = useState('');
+    const [integrationInfo, setIntegrationInfo] = useState(null);
+    const [integrationLoading, setIntegrationLoading] = useState(true);
     const messagesEndRef = useRef(null);
+
+    const fetchAiStatus = async () => {
+        try {
+            const res = await axios.get(`${BACKEND_URL}/company/ai-status`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (typeof res.data.aiEnabled === 'boolean') {
+                setAiEnabled(res.data.aiEnabled);
+                setAiStatusLoaded(true);
+                return;
+            }
+        } catch (e) {
+            // fallback to company endpoint
+        }
+        try {
+            const res = await axios.get(`${BACKEND_URL}/company`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (typeof res.data.aiEnabled === 'boolean') setAiEnabled(res.data.aiEnabled);
+            else setAiEnabled(true);
+            setAiStatusLoaded(true);
+        } catch (err) {
+            setAiStatusLoaded(true);
+        }
+    };
+
+    const handleToggleAi = async () => {
+        const next = !aiEnabled;
+        setAiToggleLoading(true);
+        try {
+            await axios.patch(`${BACKEND_URL}/company/ai-toggle`, { aiEnabled: next }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setAiEnabled(next);
+        } catch (e) {
+            try {
+                await axios.put(`${BACKEND_URL}/company/ai-toggle`, { aiEnabled: next }, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                setAiEnabled(next);
+            } catch (err2) {
+                alert(isArabic ? 'فشل تغيير حالة الذكاء الاصطناعي' : 'Failed to toggle AI');
+            }
+        } finally {
+            setAiToggleLoading(false);
+        }
+    };
+
+    const fetchIntegrationInfo = async () => {
+        setIntegrationLoading(true);
+        try {
+            const res = await axios.get(`${BACKEND_URL}/integration-manager`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const wa = (res.data || []).find(i => i.platform === 'whatsapp');
+            if (wa) {
+                setIntegrationInfo({
+                    found: true,
+                    isActive: wa.isActive,
+                    hasCredentials: wa.hasCredentials,
+                    hasPhoneId: !!wa.credentials?.phoneNumberId,
+                    phoneNumberId: wa.credentials?.phoneNumberId || '',
+                    hasToken: !!wa.credentials?.accessToken,
+                });
+            } else {
+                setIntegrationInfo({ found: false });
+            }
+        } catch (e) {
+            try {
+                const res2 = await axios.get(`${BACKEND_URL}/integration-manager/whatsapp/settings`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const creds = res2.data.credentials || {};
+                setIntegrationInfo({
+                    found: !!creds.phoneNumberId || !!creds.accessToken,
+                    isActive: true,
+                    hasCredentials: !!creds.accessToken,
+                    hasPhoneId: !!creds.phoneNumberId,
+                    phoneNumberId: creds.phoneNumberId || '',
+                    hasToken: !!creds.accessToken,
+                });
+            } catch (_) {
+                setIntegrationInfo({ found: false });
+            }
+        } finally {
+            setIntegrationLoading(false);
+        }
+    };
 
     useEffect(() => { 
         fetchSettings();
         fetchChats();
         fetchRequests();
+        fetchAiStatus();
+        fetchIntegrationInfo();
         const chatsInterval = setInterval(fetchChats, 15000);
         const reqInterval = setInterval(fetchRequests, 15000);
         return () => {
@@ -147,10 +251,89 @@ const WhatsappTab = () => {
         }
     };
 
+    const handleSendReply = async () => {
+        if (!replyText.trim() || !activeChatUser || sendingReply) return;
+        const textToSend = replyText.trim();
+        setSendingReply(true);
+        setReplyError('');
+        try {
+            const res = await axios.post(`${BACKEND_URL}/handoff/reply`, {
+                userId: activeChatUser,
+                platform: 'whatsapp',
+                message: textToSend
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            // Success — check if Meta actually delivered or returned warning
+            if (res.data?.warning) setReplyError(res.data.warning);
+            setReplyText('');
+            setMessages(prev => [...prev, { text: textToSend, sender: 'agent', createdAt: new Date().toISOString(), platform: 'whatsapp', status: 'delivered' }]);
+            setTimeout(() => {
+                fetchMessages(activeChatUser);
+                fetchChats();
+            }, 500);
+        } catch (e) {
+            const raw = e.response?.data;
+            const msg = raw?.error || raw?.details || raw?.message || e.message || 'Unknown error';
+            const details = raw?.metaError || raw?.details || '';
+            const full = details ? `${msg} — ${typeof details === 'string' ? details.substring(0,300) : JSON.stringify(details).substring(0,300)}` : msg;
+            setReplyError(full);
+            console.error('[WhatsApp Send Error]', raw || e);
+        } finally {
+            setSendingReply(false);
+        }
+    };
+
+    const handleSendNewChat = async () => {
+        const cleanNumber = newChatNumber.replace(/[^0-9]/g, '');
+        if (!cleanNumber || cleanNumber.length < 8) {
+            setNewChatError(isArabic ? 'أدخل رقم صحيح مع رمز الدولة (مثال: 201012345678)' : 'Enter a valid number with country code (e.g. 201012345678)');
+            return;
+        }
+        if (!newChatMessage.trim()) {
+            setNewChatError(isArabic ? 'اكتب نص الرسالة' : 'Enter message text');
+            return;
+        }
+        setSendingNewChat(true);
+        setNewChatError('');
+        try {
+            const res = await axios.post(`${BACKEND_URL}/handoff/reply`, {
+                userId: cleanNumber,
+                platform: 'whatsapp',
+                message: newChatMessage.trim()
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.data?.warning) setNewChatError(res.data.warning);
+            setNewChatMessage('');
+            setNewChatNumber('');
+            setShowNewChat(false);
+            setActiveChatUser(cleanNumber);
+            fetchChats();
+            setTimeout(() => fetchMessages(cleanNumber), 800);
+        } catch (e) {
+            const raw = e.response?.data;
+            const msg = raw?.error || raw?.details || e.message || 'Unknown error';
+            const details = raw?.metaError || raw?.details || '';
+            const full = details ? `${msg} — ${typeof details === 'string' ? details.substring(0,300) : JSON.stringify(details).substring(0,300)}` : msg;
+            setNewChatError(full);
+            console.error('[WhatsApp New Chat Error]', raw || e);
+        } finally {
+            setSendingNewChat(false);
+        }
+    };
+
     const formatTime = (val) => {
         if (!val) return '';
         const d = val?._seconds ? new Date(val._seconds * 1000) : new Date(val);
         return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
+
+    const getSenderLabel = (sender) => {
+        if (sender === 'user') return isArabic ? 'العميل' : 'Customer';
+        if (sender === 'ai') return 'AI';
+        if (sender === 'agent') return isArabic ? 'أنت' : 'You';
+        return sender === 'user' ? (isArabic ? 'العميل' : 'Customer') : 'VOXIO';
     };
 
     // ─── PREMIUM STYLES ────────────────────────────────────────────────────────
@@ -194,6 +377,134 @@ const WhatsappTab = () => {
                     </button>
                 </div>
             </div>
+
+            {/* ── Global AI Toggle — Prominent ── */}
+            <div className="dash-card" style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap',
+                padding: '16px 18px', marginBottom: '18px', borderRadius: '16px',
+                background: aiEnabled ? 'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 50%, #ffffff 100%)' : 'linear-gradient(135deg, #fef2f2 0%, #fff7ed 50%, #ffffff 100%)',
+                border: `1px solid ${aiEnabled ? 'rgba(37,211,102,0.18)' : 'rgba(239,68,68,0.15)'}`,
+                boxShadow: aiEnabled ? '0 6px 18px rgba(37,211,102,0.08)' : '0 6px 18px rgba(239,68,68,0.07)'
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flex: '1 1 260px' }}>
+                    <div style={{
+                        width: '44px', height: '44px', borderRadius: '12px',
+                        background: aiEnabled ? 'linear-gradient(135deg,#25D366,#128C7E)' : 'linear-gradient(135deg,#ef4444,#dc2626)',
+                        color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem',
+                        boxShadow: aiEnabled ? '0 6px 14px rgba(37,211,102,0.25)' : '0 6px 14px rgba(239,68,68,0.2)',
+                        flexShrink: 0
+                    }}>
+                        <i className={aiEnabled ? 'fas fa-robot' : 'fas fa-robot'} style={{ opacity: aiEnabled ? 1 : 0.95 }} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span style={{ fontWeight: 900, fontSize: '0.95rem', color: aiEnabled ? '#065f46' : '#7f1d1d' }}>
+                                {isArabic ? 'الرد التلقائي بالذكاء الاصطناعي' : 'AI Auto-Responder'}
+                            </span>
+                            <span style={{
+                                fontSize: '0.68rem', fontWeight: 900, letterSpacing: '0.06em', padding: '3px 8px', borderRadius: '20px',
+                                background: aiEnabled ? '#dcfce7' : '#fee2e2', color: aiEnabled ? '#166534' : '#991b1b',
+                                border: `1px solid ${aiEnabled ? '#bbf7d0' : '#fecaca'}`
+                            }}>
+                                {aiEnabled ? (isArabic ? '● نشط' : '● ACTIVE') : (isArabic ? '● متوقف' : '● PAUSED')}
+                            </span>
+                            {!aiStatusLoaded && <span style={{ fontSize: '0.7rem', color: 'var(--dash-text-sec)' }}><i className="fas fa-spinner fa-spin" /></span>}
+                        </div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--dash-text-sec)', marginTop: '4px', lineHeight: 1.5, fontWeight: 600 }}>
+                            {aiEnabled
+                                ? (isArabic ? 'الذكاء الاصطناعي يرد تلقائياً على كل رسائل واتساب الواردة.' : 'AI is replying automatically to all incoming WhatsApp messages.')
+                                : (isArabic ? 'الرد التلقائي متوقف — جميع الرسائل تتطلب تدخلاً بشرياً.' : 'Auto-reply paused — all messages need human attention.')}
+                        </div>
+                    </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                    <Link to="/dashboard/whatsapp-bulk" className="dash-btn" style={{
+                        background: 'linear-gradient(135deg,#111827,#1f2937)', color: 'white', border: 'none',
+                        padding: '10px 16px', borderRadius: '12px', fontWeight: 800, fontSize: '0.85rem', height: 'auto',
+                        display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none'
+                    }}>
+                        <i className="fas fa-paper-plane" /> {isArabic ? 'الإرسال الجماعي' : 'Bulk Sender'}
+                    </Link>
+
+                    <button
+                        onClick={handleToggleAi}
+                        disabled={aiToggleLoading || !aiStatusLoaded}
+                        style={{
+                            display: 'flex', alignItems: 'center', gap: '10px',
+                            background: aiEnabled ? 'linear-gradient(135deg,#25D366,#128C7E)' : 'linear-gradient(135deg,#ef4444,#dc2626)',
+                            color: 'white', border: 'none', borderRadius: '12px', padding: '10px 16px',
+                            fontWeight: 900, fontSize: '0.88rem', cursor: aiToggleLoading ? 'wait' : 'pointer',
+                            boxShadow: aiEnabled ? '0 8px 16px rgba(37,211,102,0.22)' : '0 8px 16px rgba(239,68,68,0.2)',
+                            opacity: aiToggleLoading ? 0.7 : 1, minWidth: '140px', justifyContent: 'center'
+                        }}
+                    >
+                        {aiToggleLoading ? <i className="fas fa-spinner fa-spin" /> : <i className={aiEnabled ? 'fas fa-pause' : 'fas fa-play'} />}
+                        {aiEnabled ? (isArabic ? 'إيقاف الـ AI' : 'Stop AI') : (isArabic ? 'تفعيل الـ AI' : 'Start AI')}
+                    </button>
+
+                    {/* Decorative toggle switch visual */}
+                    <div
+                        onClick={!aiToggleLoading && aiStatusLoaded ? handleToggleAi : undefined}
+                        style={{
+                            width: '54px', height: '30px', borderRadius: '20px', padding: '3px',
+                            background: aiEnabled ? '#25D366' : '#e5e7eb',
+                            border: `1px solid ${aiEnabled ? 'rgba(37,211,102,0.3)' : '#d1d5db'}`,
+                            display: 'flex', alignItems: 'center', justifyContent: aiEnabled ? 'flex-end' : 'flex-start',
+                            cursor: aiToggleLoading ? 'wait' : 'pointer', transition: 'all 0.25s ease', flexShrink: 0
+                        }}
+                        title={aiEnabled ? (isArabic ? 'إيقاف' : 'Turn off') : (isArabic ? 'تفعيل' : 'Turn on')}
+                    >
+                        <div style={{
+                            width: '22px', height: '22px', borderRadius: '50%', background: 'white',
+                            boxShadow: '0 2px 6px rgba(0,0,0,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '0.6rem', color: aiEnabled ? '#25D366' : '#9ca3af', transition: 'all 0.25s ease'
+                        }}>
+                            <i className={aiEnabled ? 'fas fa-check' : 'fas fa-times'} />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* ── Integration Status / Error Banner ── */}
+            {!integrationLoading && integrationInfo && !integrationInfo.found && (
+                <div className="dash-card" style={{
+                    background: 'linear-gradient(135deg,#fef2f2,#fff7ed)', border: '1px solid #fecaca',
+                    padding: '14px 16px', borderRadius: '14px', marginBottom: '16px',
+                    display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap'
+                }}>
+                    <span style={{ width:'36px', height:'36px', borderRadius:'10px', background:'#ef4444', color:'white', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}><i className="fas fa-unlink" /></span>
+                    <div style={{ flex:1 }}>
+                        <div style={{ fontWeight:900, color:'#991b1b', fontSize:'0.9rem' }}>{isArabic ? 'واتساب غير مربوط' : 'WhatsApp not connected'}</div>
+                        <div style={{ fontSize:'0.8rem', color:'#7f1d1d', marginTop:'2px' }}>{isArabic ? 'لن تصل الرسائل حتى تربط رقم واتساب الرسمي. اذهب للتكاملات وأدخل Phone Number ID و Access Token.' : 'Messages will not deliver until you connect your official WhatsApp number in Integrations.'}</div>
+                    </div>
+                    <Link to="/dashboard/integrations" className="dash-btn" style={{ background:'#dc2626', color:'white', border:'none', padding:'8px 14px', borderRadius:'10px', fontWeight:800, fontSize:'0.85rem', textDecoration:'none' }}>
+                        {isArabic ? 'ربط واتساب' : 'Connect WhatsApp'} <i className="fas fa-external-link-alt" style={{ fontSize:'0.7rem' }} />
+                    </Link>
+                </div>
+            )}
+            {!integrationLoading && integrationInfo?.found && !integrationInfo.hasCredentials && (
+                <div className="dash-card" style={{
+                    background:'linear-gradient(135deg,#fffbeb,#fef3c7)', border:'1px solid #fde68a',
+                    padding:'14px 16px', borderRadius:'14px', marginBottom:'16px',
+                    display:'flex', alignItems:'center', gap:'12px', flexWrap:'wrap'
+                }}>
+                    <span style={{ width:'36px', height:'36px', borderRadius:'10px', background:'#f59e0b', color:'white', display:'flex', alignItems:'center', justifyContent:'center' }}><i className="fas fa-exclamation-triangle" /></span>
+                    <div style={{ flex:1 }}>
+                        <div style={{ fontWeight:900, color:'#92400e', fontSize:'0.9rem' }}>{isArabic ? 'إعدادات واتساب ناقصة' : 'WhatsApp credentials incomplete'}</div>
+                        <div style={{ fontSize:'0.8rem', color:'#78350f' }}>
+                            {isArabic ? `PhoneNumberId: ${integrationInfo.phoneNumberId ? '✓ موجود' : '✗ مفقود'} — AccessToken: ${integrationInfo.hasToken ? '✓ موجود' : '✗ مفقود'}` : `PhoneNumberId: ${integrationInfo.hasPhoneId?'✓':'✗'} — Token: ${integrationInfo.hasToken?'✓':'✗'}`}
+                        </div>
+                    </div>
+                    <Link to="/dashboard/integrations" className="dash-btn dash-btn-outline" style={{ padding:'8px 14px', borderRadius:'10px', fontSize:'0.85rem' }}>{isArabic?'إصلاح':'Fix'}</Link>
+                </div>
+            )}
+            {!integrationLoading && integrationInfo?.found && integrationInfo.hasCredentials && !integrationInfo.isActive && (
+                <div className="dash-card" style={{ background:'#fef2f2', border:'1px solid #fecaca', padding:'12px 16px', borderRadius:'14px', marginBottom:'16px', display:'flex', alignItems:'center', gap:'10px' }}>
+                    <i className="fas fa-pause-circle" style={{ color:'#ef4444' }} />
+                    <span style={{ fontWeight:700, color:'#991b1b', fontSize:'0.85rem' }}>{isArabic ? 'التكامل متوقف — فعّله من التكاملات' : 'Integration paused — enable it in Integrations'}</span>
+                </div>
+            )}
 
             <AnimatePresence mode="wait">
                 {subTab === 'requests' ? (
@@ -285,9 +596,72 @@ const WhatsappTab = () => {
                         ) : (
                         <div style={{ display: 'flex', height: '600px', borderRadius: '24px', overflow: 'hidden', background: 'var(--dash-card)', border: '1px solid var(--dash-border)' }}>
                                 {/* Sidebar */}
-                                <div style={{ width: '280px', borderInlineEnd: '1px solid var(--dash-border)', overflowY: 'auto', background: 'rgba(var(--color-text-rgb), 0.02)', flexShrink: 0 }}>
+                                <div style={{ width: '280px', borderInlineEnd: '1px solid var(--dash-border)', overflowY: 'auto', background: 'rgba(var(--color-text-rgb), 0.02)', flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
                                     <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--dash-border)', fontSize: '0.8rem', fontWeight: '800', color: 'var(--dash-text-sec)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                         {isArabic ? 'المحادثات' : 'Chats'} ({chats.length})
+                                    </div>
+                                    {/* ── Manual New Chat Composer ── */}
+                                    <div style={{ padding: '12px', borderBottom: '1px solid var(--dash-border)', background: 'var(--dash-card)' }}>
+                                        {!showNewChat ? (
+                                            <button
+                                                onClick={() => setShowNewChat(true)}
+                                                style={{
+                                                    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                                                    background: 'linear-gradient(135deg,#25D366,#128C7E)', color: 'white', border: 'none',
+                                                    padding: '10px', borderRadius: '10px', fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer',
+                                                    boxShadow: '0 4px 12px rgba(37,211,102,0.2)'
+                                                }}
+                                            >
+                                                <i className="fas fa-plus" /> {isArabic ? 'رسالة جديدة' : 'New Message'}
+                                            </button>
+                                        ) : (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                <input
+                                                    className="dash-input"
+                                                    placeholder={isArabic ? 'رقم واتساب مع رمز الدولة (2010...)' : 'WhatsApp number with country code (2010...)'}
+                                                    value={newChatNumber}
+                                                    onChange={e => setNewChatNumber(e.target.value)}
+                                                    style={{ fontSize: '0.85rem', padding: '10px 12px' }}
+                                                />
+                                                <textarea
+                                                    className="dash-textarea"
+                                                    placeholder={isArabic ? 'نص الرسالة...' : 'Message...'}
+                                                    value={newChatMessage}
+                                                    onChange={e => setNewChatMessage(e.target.value)}
+                                                    rows={2}
+                                                    style={{ fontSize: '0.85rem', minHeight: '70px' }}
+                                                />
+                                                {newChatError && (
+                                                    <div style={{ background:'#fef2f2', border:'1px solid #fecaca', color:'#991b1b', padding:'8px 10px', borderRadius:'10px', fontSize:'0.75rem', lineHeight:1.5, wordBreak:'break-word' }}>
+                                                        <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'8px' }}>
+                                                            <span><i className="fas fa-exclamation-circle" /> {newChatError}</span>
+                                                            <button onClick={()=>setNewChatError('')} style={{ background:'none', border:'none', color:'#991b1b', cursor:'pointer', padding:'2px' }}><i className="fas fa-times" /></button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                <div style={{ display: 'flex', gap: '8px' }}>
+                                                    <button
+                                                        onClick={handleSendNewChat}
+                                                        disabled={sendingNewChat}
+                                                        className="dash-btn"
+                                                        style={{ flex: 1, background: '#25D366', color: 'white', border: 'none', padding: '8px', borderRadius: '10px', fontWeight: 800, fontSize: '0.85rem', opacity: sendingNewChat ? 0.7 : 1, display:'flex', alignItems:'center', justifyContent:'center', gap:'6px' }}
+                                                    >
+                                                        {sendingNewChat ? <i className="fas fa-spinner fa-spin" /> : <i className="fas fa-paper-plane" />}
+                                                        {isArabic ? 'إرسال' : 'Send'}
+                                                    </button>
+                                                    <button
+                                                        onClick={() => { setShowNewChat(false); setNewChatNumber(''); setNewChatMessage(''); setNewChatError(''); }}
+                                                        className="dash-btn dash-btn-outline"
+                                                        style={{ padding: '8px 14px', borderRadius: '10px', fontSize: '0.85rem' }}
+                                                    >
+                                                        {isArabic ? 'إلغاء' : 'Cancel'}
+                                                    </button>
+                                                </div>
+                                                <div style={{ fontSize: '0.7rem', color: 'var(--dash-text-sec)', textAlign: 'center' }}>
+                                                    <i className="fas fa-info-circle" /> {isArabic ? 'سيتم الإرسال عبر رقم واتساب الرسمي' : 'Sent via your official WhatsApp number'}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                     {chats.map(chat => (
                                         <div 
@@ -316,14 +690,17 @@ const WhatsappTab = () => {
                                 </div>
 
                                 {/* Chat Area */}
-                                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--dash-bg)' }}>
+                                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--dash-bg)', minWidth: 0 }}>
                                     {activeChatUser ? (
                                         <>
                                             <div style={{ padding: '16px 20px', background: 'var(--dash-card)', borderBottom: '1px solid var(--dash-border)', fontWeight: '700', color: 'var(--dash-text)', display: 'flex', alignItems: 'center', gap: '12px' }}>
                                                 <span style={{ width: '36px', height: '36px', borderRadius: '10px', background: '#25D366', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 'bold' }}>
                                                     {activeChatUser.charAt(0).toUpperCase()}
                                                 </span>
-                                                {activeChatUser}
+                                                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activeChatUser}</span>
+                                                <span style={{ fontSize: '0.7rem', fontWeight: 800, background: 'rgba(37,211,102,0.1)', color: '#128C7E', padding: '4px 10px', borderRadius: '20px', border: '1px solid rgba(37,211,102,0.15)' }}>
+                                                    <i className="fab fa-whatsapp" /> whatsapp
+                                                </span>
                                             </div>
                                             <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', backgroundImage: 'url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png")', backgroundSize: 'cover', backgroundBlendMode: 'overlay', backgroundOpacity: 0.05 }}>
                                                 {messages.length === 0 && (
@@ -346,20 +723,83 @@ const WhatsappTab = () => {
                                                         }}
                                                     >
                                                         <div style={{ color: msg.sender === 'user' ? 'rgba(255,255,255,0.7)' : 'var(--dash-text-sec)', fontSize: '0.7rem', fontWeight: '800', marginBottom: '4px' }}>
-                                                            {msg.sender === 'user' ? (isArabic ? 'العميل' : 'Customer') : 'VOXIO Bot'}
+                                                            {getSenderLabel(msg.sender)}
                                                         </div>
-                                                        {msg.text}
-                                                        <div style={{ fontSize: '0.7rem', color: msg.sender === 'user' ? 'rgba(255,255,255,0.6)' : 'var(--dash-text-sec)', marginTop: '6px', textAlign: 'right' }}>
-                                                            {formatTime(msg.createdAt)}
+                                                        <div style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div>
+                                                        <div style={{ fontSize: '0.7rem', color: msg.sender === 'user' ? 'rgba(255,255,255,0.6)' : 'var(--dash-text-sec)', marginTop: '6px', display:'flex', alignItems:'center', justifyContent: msg.sender==='user'?'flex-end':'space-between', gap:'8px' }}>
+                                                            <span>{formatTime(msg.createdAt)}</span>
+                                                            {msg.status === 'failed' && (
+                                                                <span style={{ color:'#ef4444', fontWeight:800, display:'flex', alignItems:'center', gap:'4px', fontSize:'0.65rem', background:'rgba(239,68,68,0.1)', padding:'2px 6px', borderRadius:'20px', border:'1px solid rgba(239,68,68,0.15)' }}>
+                                                                    <i className="fas fa-exclamation-triangle" /> {isArabic?'فشل الإرسال':'failed'}
+                                                                </span>
+                                                            )}
+                                                            {msg.status === 'delivered' && <i className="fas fa-check-double" style={{ color:'#25D366', fontSize:'0.65rem' }} />}
                                                         </div>
                                                     </div>
                                                 ))}
                                                 <div ref={messagesEndRef} />
                                             </div>
+                                            {/* ── Reply Error Banner ── */}
+                                            {replyError && (
+                                                <div style={{
+                                                    margin: '0 16px 0 16px', background:'#fef2f2', border:'1px solid #fecaca', color:'#991b1b',
+                                                    padding:'10px 12px', borderRadius:'10px', fontSize:'0.8rem', lineHeight:1.6, wordBreak:'break-word',
+                                                    display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'10px', flexShrink:0
+                                                }}>
+                                                    <span><i className="fas fa-exclamation-triangle" style={{ marginInlineEnd:'6px' }} />{replyError}</span>
+                                                    <button onClick={()=>setReplyError('')} style={{ background:'#991b1b', color:'white', border:'none', borderRadius:'6px', padding:'2px 8px', fontSize:'0.7rem', cursor:'pointer', flexShrink:0 }}>{isArabic?'إخفاء':'Dismiss'}</button>
+                                                </div>
+                                            )}
+                                            {/* ── Manual Reply Composer ── */}
+                                            <div style={{
+                                                padding: '12px 16px', background: 'var(--dash-card)', borderTop: '1px solid var(--dash-border)',
+                                                display: 'flex', gap: '10px', alignItems: 'flex-end', flexShrink: 0
+                                            }}>
+                                                <textarea
+                                                    value={replyText}
+                                                    onChange={e => setReplyText(e.target.value)}
+                                                    onKeyDown={e => {
+                                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                                            e.preventDefault();
+                                                            handleSendReply();
+                                                        }
+                                                    }}
+                                                    placeholder={isArabic ? 'اكتب رسالتك هنا... (Enter للإرسال، Shift+Enter لسطر جديد)' : 'Type your message... (Enter to send, Shift+Enter for new line)'}
+                                                    rows={1}
+                                                    style={{
+                                                        flex: 1, minHeight: '44px', maxHeight: '110px', resize: 'none',
+                                                        background: 'var(--dash-bg)', border: '1px solid var(--dash-border)',
+                                                        borderRadius: '12px', padding: '12px 14px', fontSize: '0.9rem',
+                                                        color: 'var(--dash-text)', outline: 'none', lineHeight: 1.5
+                                                    }}
+                                                />
+                                                <button
+                                                    onClick={handleSendReply}
+                                                    disabled={!replyText.trim() || sendingReply}
+                                                    style={{
+                                                        background: (!replyText.trim() || sendingReply) ? '#9ca3af' : 'linear-gradient(135deg,#25D366,#128C7E)',
+                                                        color: 'white', border: 'none', borderRadius: '12px',
+                                                        padding: '12px 18px', fontWeight: 800, fontSize: '0.9rem',
+                                                        cursor: (!replyText.trim() || sendingReply) ? 'not-allowed' : 'pointer',
+                                                        display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0,
+                                                        boxShadow: (!replyText.trim() || sendingReply) ? 'none' : '0 4px 12px rgba(37,211,102,0.25)',
+                                                        opacity: (!replyText.trim() || sendingReply) ? 0.7 : 1, height: '44px'
+                                                    }}
+                                                >
+                                                    {sendingReply ? <i className="fas fa-spinner fa-spin" /> : <i className="fas fa-paper-plane" />}
+                                                    {isArabic ? 'إرسال' : 'Send'}
+                                                </button>
+                                            </div>
                                         </>
                                     ) : (
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', background: 'var(--dash-bg)', color: 'var(--dash-text-sec)', fontSize: '1rem', fontWeight: '500' }}>
-                                            {isArabic ? 'اختر محادثة لعرض الرسائل' : 'Select a chat to view messages'}
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', background: 'var(--dash-bg)', color: 'var(--dash-text-sec)', gap: '12px', padding: '24px', textAlign: 'center' }}>
+                                            <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: 'var(--dash-card)', border: '1px solid var(--dash-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#25D366', fontSize: '1.4rem' }}>
+                                                <i className="fab fa-whatsapp" />
+                                            </div>
+                                            <div style={{ fontWeight: 800, color: 'var(--dash-text)', fontSize: '1rem' }}>{isArabic ? 'اختر محادثة لعرض الرسائل' : 'Select a chat to view messages'}</div>
+                                            <div style={{ fontSize: '0.85rem', maxWidth: '280px', lineHeight: 1.5 }}>
+                                                {isArabic ? 'أو ابدأ محادثة جديدة باستخدام زر "رسالة جديدة" في القائمة الجانبية.' : 'Or start a new conversation using "New Message" in the sidebar.'}
+                                            </div>
                                         </div>
                                     )}
                                 </div>

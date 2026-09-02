@@ -718,6 +718,11 @@ router.get("/", requireAuth, async (req, res) => {
         updated = true;
     }
 
+    if (company.aiEnabled === undefined || company.aiEnabled === null) {
+        company.aiEnabled = true;
+        updated = true;
+    }
+
     if (updated) await company.save();
     
     res.json(company);
@@ -1136,6 +1141,51 @@ router.delete("/requests/:index", requireAuth, async (req, res) => {
     await company.save();
 
     res.json({ success: true, requests: company.requests });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/*-------------------------------
+  Global AI Toggle — Enable/Disable auto-responder for all WhatsApp
+-------------------------------*/
+router.get("/ai-status", requireAuth, async (req, res) => {
+  try {
+    const company = await Company.findOne({ owner: req.user._id });
+    if (!company) return res.status(404).json({ error: "Company not found" });
+    res.json({ aiEnabled: company.aiEnabled !== false });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch("/ai-toggle", requireAuth, async (req, res) => {
+  try {
+    const company = await Company.findOne({ owner: req.user._id });
+    if (!company) return res.status(404).json({ error: "Company not found" });
+    const { aiEnabled } = req.body;
+    if (typeof aiEnabled !== "boolean") {
+      return res.status(400).json({ error: "aiEnabled boolean is required" });
+    }
+    company.aiEnabled = aiEnabled;
+    await company.save();
+    res.json({ success: true, aiEnabled: company.aiEnabled });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put("/ai-toggle", requireAuth, async (req, res) => {
+  try {
+    const company = await Company.findOne({ owner: req.user._id });
+    if (!company) return res.status(404).json({ error: "Company not found" });
+    const { aiEnabled } = req.body;
+    if (typeof aiEnabled !== "boolean") {
+      return res.status(400).json({ error: "aiEnabled boolean is required" });
+    }
+    company.aiEnabled = aiEnabled;
+    await company.save();
+    res.json({ success: true, aiEnabled: company.aiEnabled });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -26,6 +26,7 @@ class CompanyModel extends FirestoreModel {
         languages: ['Arabic', 'English']
       },
       aiCredits: 500,
+      aiEnabled: true,
       humanHandoffEnabled: true,
       humanHandoffUsers: [],
       ...data
@@ -51,6 +52,16 @@ class CompanyModel extends FirestoreModel {
 
   async _syncModel(company) {
     if (!company) return null;
+    
+    // Ensure global aiEnabled defaults to true for legacy companies
+    if (company.aiEnabled === undefined || company.aiEnabled === null) {
+      company.aiEnabled = true;
+      try {
+        await company.save();
+      } catch (e) {
+        console.error("[Model Sync] Failed to save aiEnabled default", e);
+      }
+    }
     
     // Dynamic import to avoid circular dependencies just in case
     const { VALID_MODELS, DEFAULT_TEXT_MODEL } = await import("../utils/corexHelper.js");

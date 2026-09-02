@@ -109,7 +109,14 @@ router.post("/reply", requireAuth, async (req, res) => {
     });
 
     // Send reply via the appropriate platform
-    const integration = await Integration.findOne({ company: company._id, platform });
+    let integration = await Integration.findOne({ company: company._id, platform });
+    // Fallback: Firestore type mismatch (string vs id) — try broader search
+    if (!integration) {
+      try {
+        const all = await Integration.find({ platform });
+        integration = all.find(i => String(i.company) === String(company._id) || String(i.company) === String(company._id?.toString?.())) || null;
+      } catch (_) {}
+    }
 
     if (platform === "telegram" && integration?.credentials?.botToken) {
       await axios.post(`https://api.telegram.org/bot${integration.credentials.botToken}/sendMessage`, {
@@ -120,15 +127,40 @@ router.post("/reply", requireAuth, async (req, res) => {
     } else if (platform === "whatsapp" && integration?.credentials) {
       const { phoneNumberId, accessToken } = integration.credentials;
       if (phoneNumberId && accessToken) {
-        await axios.post(
-          `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
-          {
-            messaging_product: "whatsapp",
-            to: userId,
-            text: { body: message },
-          },
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
+        try {
+          await axios.post(
+            `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
+            {
+              messaging_product: "whatsapp",
+              to: String(userId).replace(/[^0-9]/g, ''),
+              type: "text",
+              text: { body: message },
+            },
+            {
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+        } catch (waErr) {
+          const metaErr = waErr.response?.data?.error || waErr.response?.data || waErr.message;
+          console.error("[Handoff Reply] WhatsApp send failed:", JSON.stringify(metaErr, null, 2));
+          // Mark last agent message as failed but don't throw away the chat — frontend will see detailed error
+          try {
+            const lastAgent = await CompanyChat.Model.findOne({ company: company._id, user: userId, platform }).sort({ createdAt: -1 });
+            if (lastAgent) await CompanyChat.Model.updateOne({ _id: lastAgent._id }, { $set: { status: 'failed', metaError: JSON.stringify(metaErr).substring(0, 500) } });
+          } catch (_) {}
+          // If Meta says outside 24h window, give actionable message
+          const msg = metaErr?.message || String(metaErr);
+          if (msg.includes('24') || msg.includes('131047') || msg.includes('template')) {
+            throw new Error(`واتساب رفض الإرسال: الرقم خارج نافذة 24 ساعة. يجب أن يراسلك العميل أولاً أو استخدم رسالة Template. التفاصيل: ${msg}`);
+          }
+          throw new Error(`فشل إرسال واتساب: ${msg}`);
+        }
+      } else {
+        console.warn("[Handoff Reply] Missing WhatsApp credentials for company", company._id);
+        throw new Error("إعدادات واتساب غير مكتملة (phoneNumberId / accessToken)");
       }
     } else if (platform === "instagram" && integration?.credentials) {
       const { accessToken, igAccountId } = integration.credentials;

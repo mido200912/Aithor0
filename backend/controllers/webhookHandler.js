@@ -356,6 +356,12 @@ export const handleWhatsAppMessage = async (body) => {
                   return;
               };
 
+              // 🌍 Global AI toggle check — if company aiEnabled is false, skip AI for everyone
+              if (company.aiEnabled === false) {
+                  console.log(`[WhatsApp Webhook] Global AI disabled for company ${company._id}. Skipping AI.`);
+                  return skipAi();
+              }
+
               // Check per-conversation aiEnabled flag on the latest chat
               const latestChat = await CompanyChat.Model.findOne({
                 company: company._id,

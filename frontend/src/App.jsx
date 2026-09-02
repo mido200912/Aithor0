@@ -23,6 +23,7 @@ const Integrations = lazy(() => import('./pages/dashboard/Integrations'));
 const TelegramTab = lazy(() => import('./pages/dashboard/TelegramTab'));
 const WebsiteTab = lazy(() => import('./pages/dashboard/WebsiteTab'));
 const WhatsappTab = lazy(() => import('./pages/dashboard/WhatsappTab'));
+const WhatsappBulk = lazy(() => import('./pages/dashboard/WhatsappBulk'));
 const InstagramTab = lazy(() => import('./pages/dashboard/InstagramTab'));
 const ModelTest = lazy(() => import('./pages/dashboard/ModelTest'));
 const Settings = lazy(() => import('./pages/dashboard/Settings'));
@@ -152,6 +153,7 @@ function App() {
                   <Route path="telegram" element={<TelegramTab />} />
                   <Route path="website-chat" element={<WebsiteTab />} />
                   <Route path="whatsapp" element={<WhatsappTab />} />
+                  <Route path="whatsapp-bulk" element={<WhatsappBulk />} />
                   <Route path="instagram" element={<InstagramTab />} />
                   <Route path="settings" element={<Settings />} />
                   <Route path="orders" element={<Orders />} />

@@ -326,6 +326,14 @@ const DashboardLayout = () => {
                             </Link>
                         </li>
                         )}
+                        {activeIntegrations.includes('whatsapp') && (
+                        <li>
+                            <Link to="/dashboard/whatsapp-bulk" className={`nav-item ${isActive('/dashboard/whatsapp-bulk')}`} onClick={handleNavItemClick} style={{ color: isActive('/dashboard/whatsapp-bulk') ? '#25D366' : undefined }}>
+                                <i className="fas fa-paper-plane"></i>
+                                {isSidebarOpen && <span>{isArabic ? 'إرسال جماعي' : 'Bulk Sender'}</span>}
+                            </Link>
+                        </li>
+                        )}
                         {activeIntegrations.includes('instagram') && (
                         <li>
                             <Link to="/dashboard/instagram" className={`nav-item nav-item-instagram ${isActive('/dashboard/instagram')}`} onClick={handleNavItemClick}>

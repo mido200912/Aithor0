@@ -12,9 +12,8 @@ const dynamicSchema = new mongoose.Schema(
 // ⚡ Pre-create indexes for frequently queried fields
 // These are created lazily when models are first used — no overhead if the index already exists
 const ensuredIndexes = new Set();
-async function ensureIndexes(model, collectionName) {
-  if (ensuredIndexes.has(collectionName)) return;
-  ensuredIndexes.add(collectionName);
+
+async function createThem(model, collectionName) {
   try {
     // Common query patterns across the app
     if (collectionName === "users") {
@@ -77,6 +76,19 @@ async function ensureIndexes(model, collectionName) {
         e.message,
       );
     }
+  }
+}
+
+async function ensureIndexes(model, collectionName) {
+  if (ensuredIndexes.has(collectionName)) return;
+  ensuredIndexes.add(collectionName);
+  
+  if (mongoose.connection.readyState === 1) {
+    createThem(model, collectionName);
+  } else {
+    mongoose.connection.once('connected', () => {
+      createThem(model, collectionName);
+    });
   }
 }
 
